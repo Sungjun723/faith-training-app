@@ -87,7 +87,10 @@ memorizationRouter.post(
   asyncHandler(async (req, res) => {
     const { scopeWeekId, testType } = createSessionSchema.parse(req.body);
 
-    // 이미 진행 중인 세션이 있으면 그것을 재사용 (이탈 후 재접속 시나리오, 문서 32번)
+    // 이미 진행 중인 세션이 있으면 재사용한다 (이탈 후 재접속 시나리오, 문서 32번).
+    // 단, 범위(scopeWeekId)나 테스트 방식(testType)이 다르면 다른 테스트를 새로 시작하려는
+    // 것이므로 재사용하지 않는다 — 재사용할 경우 클라이언트가 요청한 testType과
+    // 실제 세션의 testType이 어긋나 채점 결과 스냅샷 구조가 맞지 않는 문제가 있었다.
     const inProgress = await db.query.memorizationTestSessions.findFirst({
       where: and(
         eq(memorizationTestSessions.userId, req.user!.userId),
@@ -95,7 +98,14 @@ memorizationRouter.post(
       ),
     });
     if (inProgress) {
-      return res.json({ session: inProgress, resumed: true });
+      if (inProgress.scopeWeekId === scopeWeekId && inProgress.testType === testType) {
+        return res.json({ session: inProgress, resumed: true });
+      }
+      // 더 이상 이어가지 않을 이전 세션은 정리한다 (미완료 상태로 방치되지 않도록).
+      await db
+        .update(memorizationTestSessions)
+        .set({ status: "completed", completedAt: new Date() })
+        .where(eq(memorizationTestSessions.id, inProgress.id));
     }
 
     const passages = await getPassagesUpToWeek(scopeWeekId);

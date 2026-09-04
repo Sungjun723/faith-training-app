@@ -17,7 +17,10 @@ const showChrome = computed(() => auth.isAuthenticated && !route.meta.public);
     <AppHeader v-if="showChrome" />
     <div class="app-shell__body">
       <AppNav v-if="showChrome" />
-      <main class="app-shell__content" :class="{ 'app-shell__content--with-nav': showChrome }">
+      <main
+        class="app-shell__content"
+        :class="{ 'app-shell__content--with-nav': showChrome, 'app-shell__content--full': route.meta.fullWidth }"
+      >
         <RouterView />
       </main>
     </div>
@@ -45,6 +48,9 @@ const showChrome = computed(() => auth.isAuthenticated && !route.meta.public);
 }
 .app-shell__content--with-nav {
   padding-bottom: calc(var(--nav-height-mobile) + var(--space-6));
+}
+.app-shell__content--full {
+  max-width: none;
 }
 @media (min-width: 1024px) {
   .app-shell__content--with-nav {

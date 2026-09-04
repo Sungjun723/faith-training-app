@@ -135,13 +135,19 @@ async function goToWeekly() {
   .calendar-page {
     flex-direction: row;
     align-items: flex-start;
+    gap: var(--space-8);
   }
   .calendar-page__main {
     flex: 1 1 0;
     min-width: 0;
   }
   .calendar-page__side {
-    flex: 0 0 360px;
+    flex: 1 1 0;
+    min-width: 0;
+    max-height: calc(100vh - var(--header-height-desktop) - var(--space-8) * 2);
+    overflow-y: auto;
+    position: sticky;
+    top: calc(var(--header-height-desktop) + var(--space-4));
   }
 }
 </style>

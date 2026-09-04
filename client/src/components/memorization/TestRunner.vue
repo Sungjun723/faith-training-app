@@ -61,14 +61,19 @@ function normalizeWord(s: string): string {
 
 const fillBlankReview = computed(() => {
   if (props.testType !== "fill_blank" || !props.result?.diffOrSnapshot) return null;
-  const snapshot = props.result.diffOrSnapshot as { blanks: string[]; answers: string[] };
+  const snapshot = props.result.diffOrSnapshot as { blanks?: string[]; answers?: string[] };
+  // 서버가 보낸 스냅샷에 blanks/answers가 없는 경우(다른 테스트 방식의 결과가 잘못
+  // 섞여 들어온 경우 등) 방어적으로 렌더링을 건너뛴다 — 크래시 대신 조용히 숨긴다.
+  if (!Array.isArray(snapshot.blanks) || !Array.isArray(snapshot.answers)) return null;
+  const blanks = snapshot.blanks;
+  const answers = snapshot.answers;
   let cursor = 0;
   return words.value.map((w, i) => {
     if (!blankIndices.value.includes(i)) {
       return { text: w, status: "plain" as const };
     }
-    const expected = snapshot.blanks[cursor] ?? w;
-    const answer = (snapshot.answers[cursor] ?? "").trim();
+    const expected = blanks[cursor] ?? w;
+    const answer = (answers[cursor] ?? "").trim();
     cursor++;
     if (!answer) return { text: `[${expected}]`, status: "wrong" as const };
     if (normalizeWord(answer) === normalizeWord(expected)) {
