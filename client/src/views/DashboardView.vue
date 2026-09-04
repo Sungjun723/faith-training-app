@@ -9,6 +9,7 @@ import { useToast } from "@/composables/useToast";
 import BaseCard from "@/components/common/BaseCard.vue";
 import BaseCheckbox from "@/components/common/BaseCheckbox.vue";
 import BaseInput from "@/components/common/BaseInput.vue";
+import Icon from "@/components/common/Icon.vue";
 import LoadingState from "@/components/common/LoadingState.vue";
 import ErrorState from "@/components/common/ErrorState.vue";
 
@@ -125,9 +126,12 @@ async function toggleReading(value: boolean) {
     </BaseCard>
 
     <div class="dashboard__links">
-      <RouterLink class="dashboard__link" :to="{ name: 'calendar' }">📅 캘린더에서 자세히 보기</RouterLink>
-      <RouterLink class="dashboard__link" :to="{ name: 'weekly-summary' }">📊 주간 결산 보기</RouterLink>
-      <RouterLink class="dashboard__link" :to="{ name: 'memorization' }">📖 암송 테스트 시작하기</RouterLink>
+      <RouterLink class="dashboard__link" :to="{ name: 'calendar' }">
+        <Icon name="calendar" :size="18" /> 캘린더 &amp; 주간 결산
+      </RouterLink>
+      <RouterLink class="dashboard__link" :to="{ name: 'memorization' }">
+        <Icon name="book" :size="18" /> 암송 테스트 시작하기
+      </RouterLink>
     </div>
     </template>
   </div>
@@ -189,7 +193,9 @@ async function toggleReading(value: boolean) {
   gap: var(--space-2);
 }
 .dashboard__link {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   padding: var(--space-4);
   background: var(--color-surface);
   border-radius: var(--radius-md);

@@ -173,7 +173,7 @@ async function createWeek() {
 
     <div v-if="weeks.length === 0">
       <BaseCard>
-        <EmptyState message="등록된 주차가 없습니다. 먼저 주차를 추가해주세요." icon="🗓️" />
+        <EmptyState message="등록된 주차가 없습니다. 먼저 주차를 추가해주세요." icon="calendar" />
       </BaseCard>
     </div>
     <template v-else>
@@ -208,7 +208,7 @@ async function createWeek() {
           </div>
         </li>
       </ul>
-      <EmptyState v-else message="이 주차에 등록된 구절이 없습니다." icon="📖" />
+      <EmptyState v-else message="이 주차에 등록된 구절이 없습니다." icon="book" />
     </BaseCard>
     </template>
     </template>

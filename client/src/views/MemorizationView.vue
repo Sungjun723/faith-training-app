@@ -107,7 +107,7 @@ function goDashboard() {
 <template>
   <div class="memorization-page" v-if="!loading && !loadError">
     <BaseCard v-if="store.weekOptions.length === 0">
-      <EmptyState message="아직 등록된 암송 구절이 없습니다.\n관리자에게 문의해주세요." icon="📖" />
+      <EmptyState message="아직 등록된 암송 구절이 없습니다.\n관리자에게 문의해주세요." icon="book" />
     </BaseCard>
     <BaseCard v-else>
       <ScopeStep

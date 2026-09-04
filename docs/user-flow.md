@@ -7,7 +7,7 @@
 | `/login` | 비로그인 전용 (로그인 시 자동 redirect) | 로그인 |
 | `/dashboard` | member, admin | 홈 |
 | `/calendar` | member, admin | 월간 캘린더 + 일별 체크 |
-| `/weekly-summary` | member, admin | 주간 결산 (query: `?week=weekId`) |
+| `/weekly-summary` | member, admin | (구버전 호환용 단독 페이지) 주간 결산 — 실제 사용은 `/calendar`에 통합됨 (query: `?week=weekId`) |
 | `/profile` | member, admin | 내 프로필 |
 | `/memorization` | member, admin | 암송 테스트 (범위선택→방식선택→진행→결과) |
 | `/admin` | admin only | 관리자 홈 (전체 현황 요약) |

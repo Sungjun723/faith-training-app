@@ -44,6 +44,33 @@ adminRouter.put(
 // ---------------------------------------------------------------------------
 // 회원 관리
 // ---------------------------------------------------------------------------
+const createMemberSchema = z.object({
+  name: z.string().min(1, "이름을 입력해주세요."),
+  email: z.string().email(),
+  password: z.string().min(8, "비밀번호는 8자 이상이어야 합니다."),
+  role: z.enum(["member", "admin"]).default("member"),
+});
+
+adminRouter.post(
+  "/members",
+  asyncHandler(async (req, res) => {
+    const { name, email, password, role } = createMemberSchema.parse(req.body);
+
+    const existing = await db.query.users.findFirst({ where: eq(users.email, email) });
+    if (existing) {
+      throw new AppError("이미 사용 중인 이메일입니다.", 400);
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    await db.insert(users).values({ name, email, passwordHash, role, status: "active" });
+
+    const created = await db.query.users.findFirst({ where: eq(users.email, email) });
+    res.json({
+      user: { id: created!.id, name: created!.name, email: created!.email, role: created!.role },
+    });
+  })
+);
+
 adminRouter.get(
   "/members",
   asyncHandler(async (req, res) => {

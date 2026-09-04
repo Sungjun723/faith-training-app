@@ -5,6 +5,7 @@ import { useAuthStore } from "@/stores/auth";
 import BaseInput from "@/components/common/BaseInput.vue";
 import BaseButton from "@/components/common/BaseButton.vue";
 import BaseCard from "@/components/common/BaseCard.vue";
+import Icon from "@/components/common/Icon.vue";
 
 const email = ref("");
 const password = ref("");
@@ -23,7 +24,7 @@ async function handleSubmit() {
   <div class="login-page">
     <BaseCard class="login-page__card">
       <div class="login-page__brand">
-        <div class="login-page__logo" aria-hidden="true">✝</div>
+        <div class="login-page__logo" aria-hidden="true"><Icon name="cross" :size="26" /></div>
         <h1 class="login-page__title">신앙훈련 노트</h1>
         <p class="login-page__subtitle">매일의 훈련을 기록하고, 함께 성장해요</p>
       </div>

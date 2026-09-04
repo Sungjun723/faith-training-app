@@ -51,6 +51,33 @@ function submitFillBlank() {
   emit("submit-fill-blank", blanks, answers);
 }
 
+// 빈칸 암송 결과: 문장 전체를 다시 보여주면서 틀리거나 빠뜨린 빈칸만 빨간색으로 표시한다.
+function normalizeWord(s: string): string {
+  return s
+    .replace(/[.,!?"'"".．，。！？]/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+const fillBlankReview = computed(() => {
+  if (props.testType !== "fill_blank" || !props.result?.diffOrSnapshot) return null;
+  const snapshot = props.result.diffOrSnapshot as { blanks: string[]; answers: string[] };
+  let cursor = 0;
+  return words.value.map((w, i) => {
+    if (!blankIndices.value.includes(i)) {
+      return { text: w, status: "plain" as const };
+    }
+    const expected = snapshot.blanks[cursor] ?? w;
+    const answer = (snapshot.answers[cursor] ?? "").trim();
+    cursor++;
+    if (!answer) return { text: `[${expected}]`, status: "wrong" as const };
+    if (normalizeWord(answer) === normalizeWord(expected)) {
+      return { text: answer, status: "correct" as const };
+    }
+    return { text: `${answer}(${expected})`, status: "wrong" as const };
+  });
+});
+
 const progressPercent = computed(() => Math.round(((props.index + 1) / props.total) * 100));
 </script>
 
@@ -71,7 +98,13 @@ const progressPercent = computed(() => Math.round(((props.index + 1) / props.tot
       <p v-if="result.score !== null" class="test-runner__breakdown">
         정답 {{ result.correctCount }} · 오답 {{ result.wrongCount }} · 누락 {{ result.missingCount }}
       </p>
-      <DiffDisplay v-if="result.diffOrSnapshot?.diff" :diff="result.diffOrSnapshot.diff" />
+      <DiffDisplay v-if="testType === 'full_input' && result.diffOrSnapshot?.diff" :diff="result.diffOrSnapshot.diff" />
+      <p v-else-if="testType === 'fill_blank' && fillBlankReview" class="test-runner__blank-review">
+        <template v-for="(item, idx) in fillBlankReview" :key="idx">
+          <span :class="{ 'test-runner__word--wrong': item.status === 'wrong' }">{{ item.text }}</span>
+          {{ " " }}
+        </template>
+      </p>
       <BaseButton style="width: 100%; margin-top: 16px" @click="emit('next')">
         {{ isLast ? "결과 확인" : "다음 구절" }}
       </BaseButton>
@@ -169,6 +202,14 @@ const progressPercent = computed(() => Math.round(((props.index + 1) / props.tot
 }
 .test-runner__result {
   padding: var(--space-4) 0;
+}
+.test-runner__blank-review {
+  font-family: var(--font-serif);
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-relaxed);
+}
+.test-runner__word--wrong {
+  color: var(--color-danger);
 }
 .test-runner__score {
   font-size: var(--font-size-2xl);

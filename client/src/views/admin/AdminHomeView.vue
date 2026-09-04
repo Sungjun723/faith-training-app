@@ -3,6 +3,7 @@ import { onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { api } from "@/utils/api";
 import BaseCard from "@/components/common/BaseCard.vue";
+import Icon from "@/components/common/Icon.vue";
 import LoadingState from "@/components/common/LoadingState.vue";
 import ErrorState from "@/components/common/ErrorState.vue";
 
@@ -53,9 +54,15 @@ onMounted(load);
     </div>
 
     <div class="admin-home__links">
-      <RouterLink class="admin-home__link" :to="{ name: 'admin-members' }">👥 회원 관리</RouterLink>
-      <RouterLink class="admin-home__link" :to="{ name: 'admin-memorization' }">📖 암송 구절 관리</RouterLink>
-      <RouterLink class="admin-home__link" :to="{ name: 'admin-statistics' }">📊 전체 통계</RouterLink>
+      <RouterLink class="admin-home__link" :to="{ name: 'admin-members' }">
+        <Icon name="users" :size="18" /> 회원 관리
+      </RouterLink>
+      <RouterLink class="admin-home__link" :to="{ name: 'admin-memorization' }">
+        <Icon name="book" :size="18" /> 암송 구절 관리
+      </RouterLink>
+      <RouterLink class="admin-home__link" :to="{ name: 'admin-statistics' }">
+        <Icon name="chart" :size="18" /> 전체 통계
+      </RouterLink>
     </div>
   </div>
 </template>
@@ -91,7 +98,9 @@ onMounted(load);
   gap: var(--space-2);
 }
 .admin-home__link {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   padding: var(--space-4);
   background: var(--color-surface);
   border-radius: var(--radius-md);

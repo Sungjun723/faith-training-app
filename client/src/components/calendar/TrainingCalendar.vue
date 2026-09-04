@@ -154,9 +154,9 @@ const cells = computed<CalendarCell[]>(() => {
   background: var(--color-primary);
 }
 .training-calendar__dot--accent {
-  background: var(--color-accent);
+  background: var(--color-text);
 }
 .training-calendar__dot--success {
-  background: var(--color-success);
+  background: var(--color-text-muted);
 }
 </style>

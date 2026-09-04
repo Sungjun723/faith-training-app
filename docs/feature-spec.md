@@ -38,7 +38,9 @@ GET    /api/memorization/sessions?status=completed  → 이력 조회
 ### Admin
 ```
 GET    /api/admin/members
+POST   /api/admin/members                     → 신규 회원 추가 { name, email, password, role? }
 GET    /api/admin/members/:id                 → 일별/주간/암송 상세
+PATCH  /api/admin/members/:id/password        → 관리자가 회원 비밀번호 직접 재설정 { newPassword }
 PATCH  /api/admin/members/:id/status          → active/inactive 전환
 
 GET    /api/admin/weeks

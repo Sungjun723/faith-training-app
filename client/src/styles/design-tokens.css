@@ -6,36 +6,36 @@
    ========================================================================== */
 
 :root {
-  /* ---- Color: base (iOS grouped background 계열) ---- */
-  --color-bg: #f2f2f7;
+  /* ---- Color: base (순백 배경 기반) ---- */
+  --color-bg: #ffffff;
   --color-surface: #ffffff;
-  --color-surface-muted: #f2f2f7;
-  --color-surface-translucent: rgba(255, 255, 255, 0.72);
+  --color-surface-muted: #f2f2f2;
+  --color-surface-translucent: rgba(255, 255, 255, 0.78);
 
-  /* ---- Color: brand (iOS System Blue 계열 — 신뢰감·현대적) ---- */
-  --color-primary: #0a6cff;
-  --color-primary-dark: #0552cc;
-  --color-primary-light: #e8f1ff;
+  /* ---- Color: brand (요청 색상 — 검정 / #00703c / 흰색) ---- */
+  --color-primary: #00703c;
+  --color-primary-dark: #00542c;
+  --color-primary-light: #e3f0e9;
 
-  /* ---- Color: accent (따뜻한 톤 포인트 — 암송/스트릭 등에만 절제해서 사용) ---- */
-  --color-accent: #d68a3c;
-  --color-accent-light: #faf0e2;
+  /* ---- Color: accent (기본 팔레트 안에서만 사용 — 별도 색상 추가하지 않음) ---- */
+  --color-accent: #1c1c1e;
+  --color-accent-light: #f2f2f2;
 
-  /* ---- Color: semantic ---- */
-  --color-success: #34a853;
-  --color-success-light: #e8f6ec;
-  --color-danger: #ff3b30;
-  --color-danger-light: #ffeceb;
+  /* ---- Color: semantic (브랜드 그린을 성공 색으로 그대로 사용, 오류만 기능상 빨강 유지) ---- */
+  --color-success: #00703c;
+  --color-success-light: #e3f0e9;
+  --color-danger: #d0342c;
+  --color-danger-light: #fbe9e8;
 
-  /* ---- Color: text (iOS label 계열) ---- */
-  --color-text: #1c1c1e;
-  --color-text-secondary: #6e6e73;
-  --color-text-muted: #aeaeb2;
+  /* ---- Color: text (검정 기반) ---- */
+  --color-text: #000000;
+  --color-text-secondary: rgba(0, 0, 0, 0.55);
+  --color-text-muted: rgba(0, 0, 0, 0.35);
   --color-text-on-primary: #ffffff;
 
-  /* ---- Color: border (아주 옅은 hairline) ---- */
-  --color-border: rgba(60, 60, 67, 0.12);
-  --color-border-strong: rgba(60, 60, 67, 0.22);
+  /* ---- Color: border (검정의 옅은 음영) ---- */
+  --color-border: rgba(0, 0, 0, 0.12);
+  --color-border-strong: rgba(0, 0, 0, 0.24);
 
   /* ---- Typography: 시스템 폰트 우선 (Apple 권장) ---- */
   --font-sans:

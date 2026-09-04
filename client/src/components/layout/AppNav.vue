@@ -2,20 +2,20 @@
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
+import Icon from "@/components/common/Icon.vue";
 
 const route = useRoute();
 const auth = useAuthStore();
 
 const memberLinks = [
-  { name: "dashboard", label: "홈", icon: "🏠" },
-  { name: "calendar", label: "캘린더", icon: "📅" },
-  { name: "weekly-summary", label: "한 주 결산", icon: "📊" },
-  { name: "memorization", label: "암송", icon: "📖" },
-  { name: "profile", label: "Profile", icon: "👤" },
+  { name: "dashboard", label: "홈", icon: "home" },
+  { name: "calendar", label: "캘린더", icon: "calendar" },
+  { name: "memorization", label: "암송", icon: "book" },
+  { name: "profile", label: "Profile", icon: "user" },
 ];
 
 const links = computed(() =>
-  auth.isAdmin ? [...memberLinks, { name: "admin", label: "관리자", icon: "⚙️" }] : memberLinks
+  auth.isAdmin ? [...memberLinks, { name: "admin", label: "관리자", icon: "gear" }] : memberLinks
 );
 
 function isActive(name: string) {
@@ -33,7 +33,7 @@ function isActive(name: string) {
       class="app-nav__item"
       :class="{ 'is-active': isActive(link.name) }"
     >
-      <span class="app-nav__icon" aria-hidden="true">{{ link.icon }}</span>
+      <Icon :name="link.icon" :size="22" class="app-nav__icon" />
       <span class="app-nav__label">{{ link.label }}</span>
     </RouterLink>
   </nav>
@@ -85,6 +85,7 @@ function isActive(name: string) {
     left: 0;
     right: auto;
     width: var(--sidebar-width-desktop);
+    height: auto;
     flex-direction: column;
     justify-content: flex-start;
     align-items: stretch;
