@@ -12,6 +12,7 @@ function close() {
       <div v-if="modelValue" class="base-modal__backdrop" @click.self="close">
         <Transition name="modal-pop" appear>
           <div v-if="modelValue" class="base-modal" role="dialog" aria-modal="true">
+            <div class="base-modal__handle" aria-hidden="true" />
             <header v-if="title" class="base-modal__header">
               <h2 class="base-modal__title">{{ title }}</h2>
               <button class="base-modal__close" aria-label="닫기" @click="close">✕</button>
@@ -30,7 +31,8 @@ function close() {
 .base-modal__backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -50,9 +52,19 @@ function close() {
   overflow-y: auto;
   padding: var(--space-6);
 }
+.base-modal__handle {
+  width: 36px;
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: var(--color-border-strong);
+  margin: 0 auto var(--space-4);
+}
 @media (min-width: 768px) {
   .base-modal {
     border-radius: var(--radius-lg);
+  }
+  .base-modal__handle {
+    display: none;
   }
 }
 .base-modal__header {

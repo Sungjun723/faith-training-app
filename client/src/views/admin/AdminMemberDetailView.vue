@@ -5,8 +5,10 @@ import { api } from "@/utils/api";
 import type { WeeklySummary } from "@/stores/weekly";
 import BaseCard from "@/components/common/BaseCard.vue";
 import BaseButton from "@/components/common/BaseButton.vue";
+import BaseInput from "@/components/common/BaseInput.vue";
 import LoadingState from "@/components/common/LoadingState.vue";
 import ErrorState from "@/components/common/ErrorState.vue";
+import { useToast } from "@/composables/useToast";
 
 interface Detail {
   user: { id: number; name: string; email: string; status: "active" | "inactive" };
@@ -37,6 +39,28 @@ async function toggleStatus() {
   const next = detail.value.user.status === "active" ? "inactive" : "active";
   await api.patch(`/admin/members/${detail.value.user.id}/status`, { status: next });
   await load();
+}
+
+const toast = useToast();
+const newPassword = ref("");
+const resettingPassword = ref(false);
+
+async function resetPassword() {
+  if (!detail.value) return;
+  if (newPassword.value.length < 8) {
+    toast.error("비밀번호는 8자 이상이어야 합니다.");
+    return;
+  }
+  resettingPassword.value = true;
+  try {
+    await api.patch(`/admin/members/${detail.value.user.id}/password`, { newPassword: newPassword.value });
+    toast.success("비밀번호가 변경되었습니다.");
+    newPassword.value = "";
+  } catch {
+    toast.error("비밀번호 변경에 실패했습니다.");
+  } finally {
+    resettingPassword.value = false;
+  }
 }
 </script>
 
@@ -77,6 +101,14 @@ async function toggleStatus() {
     <BaseButton :variant="detail.user.status === 'active' ? 'danger' : 'primary'" @click="toggleStatus">
       {{ detail.user.status === "active" ? "휴면 처리" : "활동 회원으로 전환" }}
     </BaseButton>
+
+    <BaseCard class="admin-member-detail__section">
+      <h2 class="admin-member-detail__section-title">비밀번호 재설정</h2>
+      <div class="admin-member-detail__password-row">
+        <BaseInput v-model="newPassword" type="password" placeholder="새 비밀번호 (8자 이상)" />
+        <BaseButton size="sm" :disabled="resettingPassword" @click="resetPassword">변경</BaseButton>
+      </div>
+    </BaseCard>
   </div>
 </template>
 
@@ -114,5 +146,13 @@ async function toggleStatus() {
   text-align: left;
   padding: var(--space-2);
   border-bottom: 1px solid var(--color-border);
+}
+.admin-member-detail__password-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+.admin-member-detail__password-row > *:first-child {
+  flex: 1;
 }
 </style>

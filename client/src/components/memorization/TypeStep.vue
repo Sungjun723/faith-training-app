@@ -41,20 +41,21 @@ const options: { type: TestType; title: string; desc: string }[] = [
 .type-step__card {
   text-align: left;
   padding: var(--space-5);
-  border: 1px solid var(--color-border);
+  border: none;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  transition: border-color var(--duration-fast) var(--easing-standard), transform var(--duration-fast) var(--easing-standard);
+  transition: box-shadow var(--duration-instant) var(--easing-standard), transform var(--duration-instant) var(--easing-standard);
 }
 .type-step__card:active {
   transform: scale(0.98);
 }
 .type-step__card:hover {
-  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md);
 }
 .type-step__card-title {
   font-weight: var(--font-weight-bold);

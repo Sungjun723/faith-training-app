@@ -152,18 +152,6 @@ export const appSettings = mysqlTable("app_settings", {
 });
 
 // ---------------------------------------------------------------------------
-// password_reset_tokens (이메일 비밀번호 재설정)
-// ---------------------------------------------------------------------------
-export const passwordResetTokens = mysqlTable("password_reset_tokens", {
-  id: int("id").primaryKey().autoincrement(),
-  userId: int("user_id").notNull().references(() => users.id),
-  tokenHash: varchar("token_hash", { length: 128 }).notNull().unique(),
-  expiresAt: timestamp("expires_at").notNull(),
-  usedAt: timestamp("used_at"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
 // relations (조인 편의용)
 // ---------------------------------------------------------------------------
 export const usersRelations = relations(users, ({ many }) => ({

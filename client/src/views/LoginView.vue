@@ -35,9 +35,7 @@ async function handleSubmit() {
         <BaseButton type="submit" :disabled="auth.loading" style="width: 100%; margin-top: 8px">
           {{ auth.loading ? "로그인 중..." : "로그인" }}
         </BaseButton>
-        <RouterLink :to="{ name: 'forgot-password' }" class="login-page__forgot">
-          비밀번호를 잊으셨나요?
-        </RouterLink>
+        <p class="login-page__hint">비밀번호를 잊으셨다면 관리자에게 문의해주세요.</p>
       </form>
     </BaseCard>
   </div>
@@ -50,7 +48,7 @@ async function handleSubmit() {
   align-items: center;
   justify-content: center;
   padding: var(--space-5);
-  background: linear-gradient(180deg, var(--color-primary-light) 0%, var(--color-bg) 45%);
+  background: var(--color-bg);
 }
 .login-page__card {
   width: 100%;
@@ -92,12 +90,10 @@ async function handleSubmit() {
   font-size: var(--font-size-sm);
   margin: 0;
 }
-.login-page__forgot {
-  display: block;
+.login-page__hint {
   text-align: center;
   margin-top: var(--space-2);
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
-  text-decoration: none;
 }
 </style>

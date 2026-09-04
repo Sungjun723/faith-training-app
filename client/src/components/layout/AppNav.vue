@@ -49,7 +49,9 @@ function isActive(name: string) {
   left: 0;
   right: 0;
   height: var(--nav-height-mobile);
-  background: var(--color-surface);
+  background: var(--color-surface-translucent);
+  backdrop-filter: blur(var(--material-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--material-blur)) saturate(180%);
   border-top: 1px solid var(--color-border);
   z-index: 50;
 }

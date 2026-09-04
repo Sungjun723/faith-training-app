@@ -33,7 +33,9 @@ async function handleLogout() {
   align-items: center;
   justify-content: space-between;
   padding: 0 var(--space-5);
-  background: var(--color-surface);
+  background: var(--color-surface-translucent);
+  backdrop-filter: blur(var(--material-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--material-blur)) saturate(180%);
   border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;

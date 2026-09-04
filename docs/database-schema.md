@@ -165,17 +165,7 @@ users ──< audit_logs
 
 ## password_reset_tokens (비밀번호 재설정)
 
-| column | type | 제약 |
-|---|---|---|
-| id | INT AUTO_INCREMENT | PK |
-| user_id | INT | NOT NULL, FK → users.id |
-| token_hash | VARCHAR(128) | NOT NULL, UNIQUE — 평문 토큰은 저장하지 않고 SHA-256 해시만 저장 |
-| expires_at | TIMESTAMP | NOT NULL — 기본 60분 (`PASSWORD_RESET_TOKEN_EXPIRY_MINUTES`) |
-| used_at | TIMESTAMP | NULL — 사용된 토큰은 재사용 불가 |
-| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
-
-- 이메일 발송은 SMTP 환경변수(`SMTP_HOST` 등)가 설정된 경우에만 실제 전송하며, 미설정 시 개발 편의를 위해 콘솔에 재설정 링크를 출력한다.
-- 존재하지 않는 이메일로 요청해도 API는 항상 동일한 성공 메시지를 반환한다 (계정 존재 여부 노출 방지).
+~~이메일 기반 재설정은 채택하지 않기로 했습니다.~~ 관리자가 회원 상세 화면에서 새 비밀번호를 직접 입력해 재설정하는 방식(`PATCH /api/admin/members/:id/password`)으로 대체했습니다. 별도 테이블이 필요 없습니다.
 
 ## audit_logs (관리자 작업 이력, 확장용)
 

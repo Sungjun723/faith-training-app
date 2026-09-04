@@ -1,60 +1,65 @@
 /* ==========================================================================
-   Design Tokens
-   차분함 · 신뢰감 · 따뜻함 · 깨끗함을 목표로 하는 통일된 디자인 시스템.
-   .designrules(모션 철학)의 spring 트랜지션과 함께 사용한다.
+   Design Tokens — Apple-inspired
+   .designrules(apple-design)의 모션 철학 + iOS 계열 시각 언어를 반영한
+   통일된 디자인 시스템. 시스템 폰트, 넓은 여백, 반투명 머티리얼,
+   critically-damped에 가까운 spring 트랜지션을 기본으로 한다.
    ========================================================================== */
 
 :root {
-  /* ---- Color: base ---- */
-  --color-bg: #faf8f4;               /* 따뜻한 오프화이트 배경 */
+  /* ---- Color: base (iOS grouped background 계열) ---- */
+  --color-bg: #f2f2f7;
   --color-surface: #ffffff;
-  --color-surface-muted: #f2efe8;
+  --color-surface-muted: #f2f2f7;
+  --color-surface-translucent: rgba(255, 255, 255, 0.72);
 
-  /* ---- Color: brand (차분한 딥 틸 — 신뢰감) ---- */
-  --color-primary: #2f5d62;
-  --color-primary-dark: #22474b;
-  --color-primary-light: #e6eeee;
+  /* ---- Color: brand (iOS System Blue 계열 — 신뢰감·현대적) ---- */
+  --color-primary: #0a6cff;
+  --color-primary-dark: #0552cc;
+  --color-primary-light: #e8f1ff;
 
-  /* ---- Color: accent (따뜻한 골드/테라코타 — 포인트) ---- */
-  --color-accent: #c98a4b;
-  --color-accent-light: #f5e8d8;
+  /* ---- Color: accent (따뜻한 톤 포인트 — 암송/스트릭 등에만 절제해서 사용) ---- */
+  --color-accent: #d68a3c;
+  --color-accent-light: #faf0e2;
 
   /* ---- Color: semantic ---- */
-  --color-success: #4c9a6a;
-  --color-success-light: #e6f4ec;
-  --color-danger: #d64545;
-  --color-danger-light: #fbeaea;
+  --color-success: #34a853;
+  --color-success-light: #e8f6ec;
+  --color-danger: #ff3b30;
+  --color-danger-light: #ffeceb;
 
-  /* ---- Color: text ---- */
-  --color-text: #2b2b2b;
-  --color-text-secondary: #6b6b6b;
-  --color-text-muted: #a3a3a3;
+  /* ---- Color: text (iOS label 계열) ---- */
+  --color-text: #1c1c1e;
+  --color-text-secondary: #6e6e73;
+  --color-text-muted: #aeaeb2;
   --color-text-on-primary: #ffffff;
 
-  /* ---- Color: border ---- */
-  --color-border: #e6e2d8;
-  --color-border-strong: #d3cec1;
+  /* ---- Color: border (아주 옅은 hairline) ---- */
+  --color-border: rgba(60, 60, 67, 0.12);
+  --color-border-strong: rgba(60, 60, 67, 0.22);
 
-  /* ---- Typography ---- */
+  /* ---- Typography: 시스템 폰트 우선 (Apple 권장) ---- */
   --font-sans:
-    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
-    "Segoe UI", sans-serif;
-  --font-serif: "Noto Serif KR", serif; /* 암송 구절 등 본문 인용에 사용 */
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Pretendard Variable",
+    Pretendard, "Segoe UI", system-ui, sans-serif;
+  --font-serif: "Apple SD Gothic Neo", "Noto Serif KR", serif; /* 암송 구절 인용 */
 
-  --font-size-xs: 0.75rem;   /* 12px */
-  --font-size-sm: 0.875rem;  /* 14px */
-  --font-size-base: 1rem;    /* 16px */
-  --font-size-lg: 1.125rem;  /* 18px */
-  --font-size-xl: 1.375rem;  /* 22px */
-  --font-size-2xl: 1.75rem;  /* 28px */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.1875rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 2rem;
 
   --font-weight-regular: 400;
-  --font-weight-medium: 500;
+  --font-weight-medium: 590; /* SF의 텍스트 굵기와 유사 */
   --font-weight-bold: 700;
 
-  --line-height-tight: 1.3;
-  --line-height-normal: 1.6;
-  --line-height-relaxed: 1.9; /* 암송 구절용 */
+  /* 큰 글씨는 타이트하게, 본문은 넉넉하게 (designrules §15) */
+  --line-height-tight: 1.15;
+  --line-height-normal: 1.47;
+  --line-height-relaxed: 1.85;
+  --tracking-display: -0.02em;
+  --tracking-body: 0;
 
   /* ---- Spacing scale (4px 기준) ---- */
   --space-1: 4px;
@@ -68,15 +73,18 @@
   --space-12: 48px;
   --space-16: 64px;
 
-  /* ---- Border radius ---- */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  /* ---- Border radius (연속 곡률에 가까운 넉넉한 라운드) ---- */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
   --radius-full: 999px;
 
-  /* ---- Shadow (과도하지 않게) ---- */
-  --shadow-sm: 0 1px 2px rgba(43, 43, 43, 0.06);
-  --shadow-md: 0 4px 12px rgba(43, 43, 43, 0.08);
+  /* ---- Shadow (아주 옅고 넓게 퍼지는 iOS 카드 그림자) ---- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.08);
+
+  /* ---- Materials (반투명 헤더/네비게이션) ---- */
+  --material-blur: 20px;
 
   /* ---- Touch target ---- */
   --touch-target-min: 44px;
@@ -87,10 +95,14 @@
   --sidebar-width-desktop: 240px;
   --content-max-width: 960px;
 
-  /* ---- Motion (spec: spring, not linear ease — .designrules 참고) ---- */
-  --duration-fast: 150ms;
-  --duration-base: 250ms;
-  --easing-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  /* ---- Motion: critically-damped spring 근사 (designrules §4) ----
+     기본은 overshoot 없는 부드러운 정지(damping 1.0), response 0.3~0.4초.
+     제스처가 있는 momentum 인터랙션에만 살짝의 bounce를 별도로 사용한다. */
+  --duration-instant: 100ms;  /* 탭 피드백은 즉시 — pointer-down 기준 */
+  --duration-fast: 200ms;
+  --duration-base: 320ms;
+  --easing-standard: cubic-bezier(0.32, 0.72, 0, 1); /* critically-damped 근사 */
+  --easing-bounce: cubic-bezier(0.34, 1.56, 0.64, 1); /* momentum 있는 경우에만 */
 }
 
 * {
@@ -106,7 +118,9 @@ body {
   font-family: var(--font-sans);
   font-size: var(--font-size-base);
   line-height: var(--line-height-normal);
+  letter-spacing: var(--tracking-body);
   -webkit-font-smoothing: antialiased;
+  font-optical-sizing: auto;
 }
 
 #app {
@@ -115,7 +129,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font-family: inherit;
   font-size: inherit;
 }
@@ -127,4 +142,18 @@ a {
 :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: var(--tracking-display);
+  line-height: var(--line-height-tight);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

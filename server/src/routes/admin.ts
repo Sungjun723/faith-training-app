@@ -1,4 +1,5 @@
 import { Router } from "express";
+import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
@@ -100,6 +101,25 @@ adminRouter.patch(
     const userId = Number(req.params.id);
     const { status } = statusSchema.parse(req.body);
     await db.update(users).set({ status }).where(eq(users.id, userId));
+    res.json({ ok: true });
+  })
+);
+
+const passwordResetSchema = z.object({
+  newPassword: z.string().min(8, "비밀번호는 8자 이상이어야 합니다."),
+});
+
+adminRouter.patch(
+  "/members/:id/password",
+  asyncHandler(async (req, res) => {
+    const userId = Number(req.params.id);
+    const { newPassword } = passwordResetSchema.parse(req.body);
+
+    const member = await db.query.users.findFirst({ where: eq(users.id, userId) });
+    if (!member) throw new AppError("회원을 찾을 수 없습니다.", 404);
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
     res.json({ ok: true });
   })
 );

@@ -94,8 +94,8 @@ onMounted(load);
   display: block;
   padding: var(--space-4);
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
   text-decoration: none;
   color: var(--color-text);
 }

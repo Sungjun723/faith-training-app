@@ -46,16 +46,16 @@ defineEmits<{ (e: "update:modelValue", value: boolean): void }>();
 .base-checkbox__box {
   width: 24px;
   height: 24px;
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   border: 1.5px solid var(--color-border-strong);
   background: var(--color-surface);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: background-color var(--duration-fast) var(--easing-standard),
-    border-color var(--duration-fast) var(--easing-standard),
-    transform var(--duration-fast) var(--easing-standard);
+  transition: background-color var(--duration-instant) var(--easing-standard),
+    border-color var(--duration-instant) var(--easing-standard),
+    transform var(--duration-instant) var(--easing-standard);
 }
 .base-checkbox__input:checked + .base-checkbox__box {
   background: var(--color-primary);

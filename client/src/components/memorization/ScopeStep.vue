@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import type { MemorizationWeekOption } from "@/stores/memorization";
 import BaseButton from "@/components/common/BaseButton.vue";
 
@@ -15,10 +15,13 @@ watch(
   { immediate: true }
 );
 
-const selectedOption = ref<MemorizationWeekOption | null>(null);
-watch(selected, (id) => {
-  selectedOption.value = props.weekOptions.find((w) => w.id === id) ?? null;
-});
+// computed로 파생시켜 초기 selected 세팅과 무관하게 항상 최신 상태를 반영한다.
+// (이전에는 watch(selected, ...)로 별도 계산했는데, 최초 immediate 세팅 시점에는
+//  그 watcher가 아직 등록되지 않아 기본 선택값의 구절 수가 채워지지 않고
+//  "테스트 시작" 버튼이 계속 비활성화 상태로 남는 문제가 있었다.)
+const selectedOption = computed<MemorizationWeekOption | null>(
+  () => props.weekOptions.find((w) => w.id === selected.value) ?? null
+);
 </script>
 
 <template>
@@ -77,13 +80,15 @@ watch(selected, (id) => {
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-4);
-  border: 1px solid var(--color-border);
+  background: var(--color-surface);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
   min-height: var(--touch-target-min);
+  transition: box-shadow var(--duration-fast) var(--easing-standard);
 }
 .scope-step__option.is-selected {
-  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary);
   background: var(--color-primary-light);
 }
 .scope-step__count {
