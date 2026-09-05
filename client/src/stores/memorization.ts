@@ -71,6 +71,9 @@ export const useMemorizationStore = defineStore("memorization", {
       return weeks;
     },
     async startSession(scopeWeekId: number, testType: TestType) {
+      // 이전 테스트가 끝난 뒤 마지막 문항의 채점 결과가 store에 남아있으면,
+      // 새 세션의 첫 문항이 뜨기도 전에 그 결과 화면이 먼저 보이는 버그가 있었다.
+      this.lastResult = null;
       const { session } = await api.post<{ session: Session; resumed: boolean }>("/memorization/sessions", {
         scopeWeekId,
         testType,
@@ -113,6 +116,7 @@ export const useMemorizationStore = defineStore("memorization", {
       this.activeSession = null;
       this.passages = [];
       this.currentIndex = 0;
+      this.lastResult = null;
       return summary;
     },
   },
