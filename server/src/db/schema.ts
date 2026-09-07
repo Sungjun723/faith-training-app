@@ -148,6 +148,19 @@ export const auditLogs = mysqlTable("audit_logs", {
 });
 
 // ---------------------------------------------------------------------------
+// announcements (관리자가 등록하는 공지사항 - 활성 상태인 것만 회원 홈에 노출)
+// ---------------------------------------------------------------------------
+export const announcements = mysqlTable("announcements", {
+  id: int("id").primaryKey().autoincrement(),
+  title: varchar("title", { length: 200 }).notNull(),
+  content: text("content").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: int("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+});
+
+// ---------------------------------------------------------------------------
 // app_settings (단일 행 설정 테이블 - 관리자가 조정하는 전역 정책값)
 // ---------------------------------------------------------------------------
 export const appSettings = mysqlTable("app_settings", {

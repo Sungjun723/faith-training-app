@@ -15,9 +15,15 @@ interface Member {
   name: string;
   thisWeekProgress: number;
 }
+interface WeeklyStat {
+  weekNumber: number;
+  averageProgress: number;
+  members: { id: number; name: string; progress: number }[];
+}
 
 const stats = ref<Stats | null>(null);
 const members = ref<Member[]>([]);
+const weeklyStats = ref<WeeklyStat[]>([]);
 const loading = ref(true);
 const loadError = ref(false);
 
@@ -28,6 +34,8 @@ async function load() {
     stats.value = await api.get<Stats>("/admin/statistics");
     const { members: list } = await api.get<{ members: Member[] }>("/admin/members");
     members.value = [...list].sort((a, b) => b.thisWeekProgress - a.thisWeekProgress);
+    const { weeks } = await api.get<{ weeks: WeeklyStat[] }>("/admin/statistics/weekly");
+    weeklyStats.value = [...weeks].sort((a, b) => b.weekNumber - a.weekNumber);
   } catch {
     loadError.value = true;
   } finally {
@@ -65,6 +73,19 @@ onMounted(load);
         <span class="admin-statistics__member-value">{{ m.thisWeekProgress }}%</span>
       </div>
     </BaseCard>
+
+    <BaseCard v-for="w in weeklyStats" :key="w.weekNumber" class="admin-statistics__week-card">
+      <h2 class="admin-statistics__section-title">
+        {{ w.weekNumber }}주차 통계 <span class="admin-statistics__week-average">평균 {{ w.averageProgress }}%</span>
+      </h2>
+      <div class="admin-statistics__member-row" v-for="m in w.members" :key="m.id">
+        <span class="admin-statistics__member-name">{{ m.name }}</span>
+        <div class="admin-statistics__bar">
+          <div class="admin-statistics__bar-fill" :style="{ width: `${m.progress}%` }" />
+        </div>
+        <span class="admin-statistics__member-value">{{ m.progress }}%</span>
+      </div>
+    </BaseCard>
   </div>
 </template>
 
@@ -97,6 +118,14 @@ onMounted(load);
   margin: 0 0 var(--space-4);
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-bold);
+}
+.admin-statistics__week-card {
+  margin-top: var(--space-3);
+}
+.admin-statistics__week-average {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
 }
 .admin-statistics__member-row {
   display: flex;

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { api, ApiError } from "@/utils/api";
 import type { WeeklySummary } from "@/stores/weekly";
+import { useAuthStore } from "@/stores/auth";
 import BaseCard from "@/components/common/BaseCard.vue";
 import BaseButton from "@/components/common/BaseButton.vue";
 import BaseInput from "@/components/common/BaseInput.vue";
@@ -15,6 +16,7 @@ interface Detail {
     id: number;
     name: string;
     email: string;
+    role: "member" | "admin";
     status: "active" | "inactive";
     groupId: number | null;
     groupName: string | null;
@@ -30,10 +32,13 @@ interface Group {
 }
 
 const route = useRoute();
+const router = useRouter();
+const auth = useAuthStore();
 const detail = ref<Detail | null>(null);
 const groups = ref<Group[]>([]);
 const loading = ref(true);
 const loadError = ref(false);
+const isSelf = () => detail.value?.user.id === auth.user?.id;
 
 async function load() {
   loading.value = true;
@@ -99,6 +104,61 @@ async function changeGroup() {
     changingGroup.value = false;
   }
 }
+
+const changingRole = ref(false);
+
+async function promoteToAdmin() {
+  if (!detail.value) return;
+  if (!confirm(`"${detail.value.user.name}"님을 관리자로 전환할까요?`)) return;
+  changingRole.value = true;
+  try {
+    await api.patch(`/admin/members/${detail.value.user.id}/role`, { role: "admin" });
+    toast.success("관리자로 전환되었습니다.");
+    await load();
+  } catch (err) {
+    toast.error(err instanceof ApiError ? err.message : "전환에 실패했습니다.");
+  } finally {
+    changingRole.value = false;
+  }
+}
+
+async function demoteToMember() {
+  if (!detail.value || !selectedGroupId.value) {
+    toast.error("먼저 배정할 그룹을 선택해주세요.");
+    return;
+  }
+  if (!confirm(`"${detail.value.user.name}"님을 일반 회원으로 전환할까요?`)) return;
+  changingRole.value = true;
+  try {
+    await api.patch(`/admin/members/${detail.value.user.id}/role`, {
+      role: "member",
+      groupId: selectedGroupId.value,
+    });
+    toast.success("일반 회원으로 전환되었습니다.");
+    await load();
+  } catch (err) {
+    toast.error(err instanceof ApiError ? err.message : "전환에 실패했습니다.");
+  } finally {
+    changingRole.value = false;
+  }
+}
+
+const deleting = ref(false);
+
+async function removeMember() {
+  if (!detail.value) return;
+  if (!confirm(`"${detail.value.user.name}" 회원을 완전히 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) return;
+  deleting.value = true;
+  try {
+    await api.delete(`/admin/members/${detail.value.user.id}`);
+    toast.success("회원이 삭제되었습니다.");
+    router.push({ name: "admin-members" });
+  } catch (err) {
+    toast.error(err instanceof ApiError ? err.message : "삭제에 실패했습니다.");
+  } finally {
+    deleting.value = false;
+  }
+}
 </script>
 
 <template>
@@ -107,8 +167,9 @@ async function changeGroup() {
   <div class="admin-member-detail" v-else-if="detail">
     <h1 class="admin-member-detail__title">{{ detail.user.name }}</h1>
     <p class="admin-member-detail__email">{{ detail.user.email }}</p>
+    <p class="admin-member-detail__role">{{ detail.user.role === "admin" ? "관리자" : "일반 회원" }}</p>
 
-    <BaseCard class="admin-member-detail__section">
+    <BaseCard class="admin-member-detail__section" v-if="detail.user.role === 'member'">
       <h2 class="admin-member-detail__section-title">그룹</h2>
       <div class="admin-member-detail__group-row">
         <select v-model.number="selectedGroupId">
@@ -158,6 +219,42 @@ async function changeGroup() {
         <BaseButton size="sm" :disabled="resettingPassword" @click="resetPassword">변경</BaseButton>
       </div>
     </BaseCard>
+
+    <BaseCard class="admin-member-detail__section" v-if="!isSelf()">
+      <h2 class="admin-member-detail__section-title">권한</h2>
+      <p v-if="detail.user.role === 'member'" class="admin-member-detail__role-hint">
+        이 회원을 관리자로 전환합니다. 전환 즉시 그룹에서 제외됩니다.
+      </p>
+      <BaseButton
+        v-if="detail.user.role === 'member'"
+        size="sm"
+        variant="secondary"
+        :disabled="changingRole"
+        @click="promoteToAdmin"
+      >
+        관리자로 전환
+      </BaseButton>
+      <template v-else>
+        <p class="admin-member-detail__role-hint">일반 회원으로 전환 시 배정할 그룹을 선택하세요.</p>
+        <div class="admin-member-detail__group-row">
+          <select v-model.number="selectedGroupId">
+            <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }} ({{ g.startDate }} 시작)</option>
+          </select>
+          <BaseButton size="sm" variant="secondary" :disabled="changingRole" @click="demoteToMember">
+            일반 회원으로 전환
+          </BaseButton>
+        </div>
+      </template>
+    </BaseCard>
+
+    <BaseButton
+      v-if="!isSelf() && detail.user.role !== 'admin'"
+      variant="danger"
+      :disabled="deleting"
+      @click="removeMember"
+    >
+      회원 삭제
+    </BaseButton>
   </div>
 </template>
 
@@ -167,7 +264,18 @@ async function changeGroup() {
   font-size: var(--font-size-xl);
 }
 .admin-member-detail__email {
-  margin: var(--space-1) 0 var(--space-5);
+  margin: var(--space-1) 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+.admin-member-detail__role {
+  margin: 0 0 var(--space-5);
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+.admin-member-detail__role-hint {
+  margin: 0 0 var(--space-3);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
 }

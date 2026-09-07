@@ -52,6 +52,14 @@ profileRouter.get(
 
     const completedPassageIds = new Set(myCompletedResults.map((r) => r.passageId));
 
+    // 1주차부터 현재 주차까지 주차별 진행률 (Profile 화면의 "N주차 통계" 목록용)
+    const weeklyBreakdown = await Promise.all(
+      Array.from({ length: currentWeek.weekNumber }, (_, i) => i + 1).map(async (weekNumber) => {
+        const summary = await calculateWeeklySummary(user.id, weekNumber);
+        return { weekNumber, overallProgress: summary.overallProgress };
+      })
+    );
+
     res.json({
       user: {
         id: user.id,
@@ -66,6 +74,7 @@ profileRouter.get(
         totalPassages: totalPassages.length,
         completedPassages: completedPassageIds.size,
       },
+      weeklyBreakdown,
     });
   })
 );

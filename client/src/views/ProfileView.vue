@@ -10,6 +10,7 @@ interface ProfileData {
   thisWeekProgress: number;
   thisMonthProgress: number;
   memorization: { totalPassages: number; completedPassages: number };
+  weeklyBreakdown: { weekNumber: number; overallProgress: number }[];
 }
 
 const data = ref<ProfileData | null>(null);
@@ -59,6 +60,17 @@ onMounted(load);
         </p>
       </BaseCard>
     </div>
+
+    <BaseCard v-if="data.weeklyBreakdown.length > 0" class="profile-page__weekly">
+      <h2 class="profile-page__weekly-title">주차별 통계</h2>
+      <div class="profile-page__weekly-row" v-for="w in [...data.weeklyBreakdown].reverse()" :key="w.weekNumber">
+        <span class="profile-page__weekly-label">{{ w.weekNumber }}주차</span>
+        <div class="profile-page__weekly-bar">
+          <div class="profile-page__weekly-bar-fill" :style="{ width: `${w.overallProgress}%` }" />
+        </div>
+        <span class="profile-page__weekly-value">{{ w.overallProgress }}%</span>
+      </div>
+    </BaseCard>
   </div>
 </template>
 
@@ -107,5 +119,41 @@ onMounted(load);
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-bold);
   color: var(--color-primary);
+}
+.profile-page__weekly {
+  margin-top: var(--space-4);
+}
+.profile-page__weekly-title {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+}
+.profile-page__weekly-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+.profile-page__weekly-label {
+  width: 56px;
+  flex-shrink: 0;
+  font-size: var(--font-size-sm);
+}
+.profile-page__weekly-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  overflow: hidden;
+}
+.profile-page__weekly-bar-fill {
+  height: 100%;
+  background: var(--color-primary);
+}
+.profile-page__weekly-value {
+  width: 40px;
+  text-align: right;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 </style>

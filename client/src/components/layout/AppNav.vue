@@ -14,12 +14,18 @@ const memberLinks = [
   { name: "profile", label: "Profile", icon: "user" },
 ];
 
-const links = computed(() =>
-  auth.isAdmin ? [...memberLinks, { name: "admin", label: "관리자", icon: "gear" }] : memberLinks
-);
+const adminLinks = [
+  { name: "admin", label: "홈", icon: "home" },
+  { name: "admin-members", label: "회원", icon: "users" },
+  { name: "admin-groups", label: "그룹", icon: "calendar" },
+  { name: "admin-memorization", label: "암송관리", icon: "book" },
+  { name: "admin-statistics", label: "통계", icon: "chart" },
+  { name: "admin-announcements", label: "공지사항", icon: "document" },
+];
+
+const links = computed(() => (auth.isAdmin ? adminLinks : memberLinks));
 
 function isActive(name: string) {
-  if (name === "admin") return route.path.startsWith("/admin");
   return route.name === name;
 }
 </script>

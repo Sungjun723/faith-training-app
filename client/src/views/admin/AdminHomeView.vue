@@ -12,8 +12,14 @@ interface Stats {
   activeMembers: number;
   currentWeekAverageProgress: number;
 }
+interface Member {
+  id: number;
+  name: string;
+  thisWeekProgress: number;
+}
 
 const stats = ref<Stats | null>(null);
+const members = ref<Member[]>([]);
 const loading = ref(true);
 const loadError = ref(false);
 
@@ -22,6 +28,8 @@ async function load() {
   loadError.value = false;
   try {
     stats.value = await api.get<Stats>("/admin/statistics");
+    const { members: list } = await api.get<{ members: Member[] }>("/admin/members");
+    members.value = [...list].sort((a, b) => b.thisWeekProgress - a.thisWeekProgress);
   } catch {
     loadError.value = true;
   } finally {
@@ -66,7 +74,21 @@ onMounted(load);
       <RouterLink class="admin-home__link" :to="{ name: 'admin-statistics' }">
         <Icon name="chart" :size="18" /> 전체 통계
       </RouterLink>
+      <RouterLink class="admin-home__link" :to="{ name: 'admin-announcements' }">
+        <Icon name="document" :size="18" /> 공지사항 관리
+      </RouterLink>
     </div>
+
+    <BaseCard v-if="members.length > 0" class="admin-home__members">
+      <h2 class="admin-home__section-title">회원별 이번 주 진행률</h2>
+      <div class="admin-home__member-row" v-for="m in members" :key="m.id">
+        <span class="admin-home__member-name">{{ m.name }}</span>
+        <div class="admin-home__bar">
+          <div class="admin-home__bar-fill" :style="{ width: `${m.thisWeekProgress}%` }" />
+        </div>
+        <span class="admin-home__member-value">{{ m.thisWeekProgress }}%</span>
+      </div>
+    </BaseCard>
   </div>
 </template>
 
@@ -110,5 +132,41 @@ onMounted(load);
   box-shadow: var(--shadow-sm);
   text-decoration: none;
   color: var(--color-text);
+}
+.admin-home__members {
+  margin-top: var(--space-5);
+}
+.admin-home__section-title {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+}
+.admin-home__member-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+.admin-home__member-name {
+  width: 80px;
+  flex-shrink: 0;
+  font-size: var(--font-size-sm);
+}
+.admin-home__bar {
+  flex: 1;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  overflow: hidden;
+}
+.admin-home__bar-fill {
+  height: 100%;
+  background: var(--color-primary);
+}
+.admin-home__member-value {
+  width: 40px;
+  text-align: right;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 </style>

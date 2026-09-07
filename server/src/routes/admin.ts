@@ -1,13 +1,17 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import {
   users,
   groups,
   memorizationPassages,
+  memorizationTestSessions,
+  memorizationResults,
   trainingRecords,
+  weeklyTrainingRecords,
+  announcements,
 } from "../db/schema.js";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
@@ -181,6 +185,19 @@ adminRouter.get(
 );
 
 adminRouter.get(
+  "/admins",
+  asyncHandler(async (req, res) => {
+    const admins = await db.query.users.findMany({
+      where: eq(users.role, "admin"),
+      orderBy: [asc(users.name)],
+    });
+    res.json({
+      admins: admins.map((a) => ({ id: a.id, name: a.name, email: a.email })),
+    });
+  })
+);
+
+adminRouter.get(
   "/members/:id",
   asyncHandler(async (req, res) => {
     const userId = Number(req.params.id);
@@ -206,6 +223,7 @@ adminRouter.get(
         id: user.id,
         name: user.name,
         email: user.email,
+        role: user.role,
         status: user.status,
         groupId: user.groupId,
         groupName: group?.name ?? null,
@@ -259,6 +277,68 @@ adminRouter.patch(
     if (!group) throw new AppError("존재하지 않는 그룹입니다.", 400);
 
     await db.update(users).set({ groupId }).where(eq(users.id, userId));
+    res.json({ ok: true });
+  })
+);
+
+const roleChangeSchema = z.object({
+  role: z.enum(["member", "admin"]),
+  groupId: z.number().int().nullable().optional(),
+});
+
+adminRouter.patch(
+  "/members/:id/role",
+  asyncHandler(async (req, res) => {
+    const userId = Number(req.params.id);
+    if (userId === req.user!.userId) {
+      throw new AppError("자기 자신의 권한은 변경할 수 없습니다.", 400);
+    }
+    const { role, groupId } = roleChangeSchema.parse(req.body);
+    const target = await db.query.users.findFirst({ where: eq(users.id, userId) });
+    if (!target) throw new AppError("회원을 찾을 수 없습니다.", 404);
+
+    if (role === "admin") {
+      await db.update(users).set({ role: "admin", groupId: null }).where(eq(users.id, userId));
+    } else {
+      if (!groupId) {
+        throw new AppError("일반 회원은 그룹을 반드시 선택해야 합니다.", 400);
+      }
+      const group = await db.query.groups.findFirst({ where: eq(groups.id, groupId) });
+      if (!group) throw new AppError("존재하지 않는 그룹입니다.", 400);
+      await db.update(users).set({ role: "member", groupId }).where(eq(users.id, userId));
+    }
+
+    res.json({ ok: true });
+  })
+);
+
+adminRouter.delete(
+  "/members/:id",
+  asyncHandler(async (req, res) => {
+    const userId = Number(req.params.id);
+    if (userId === req.user!.userId) {
+      throw new AppError("자기 자신은 삭제할 수 없습니다.", 400);
+    }
+    const target = await db.query.users.findFirst({ where: eq(users.id, userId) });
+    if (!target) throw new AppError("회원을 찾을 수 없습니다.", 404);
+    if (target.role === "admin") {
+      throw new AppError("관리자 계정은 삭제할 수 없습니다. 먼저 일반 회원으로 전환해주세요.", 400);
+    }
+
+    await db.transaction(async (tx) => {
+      const sessions = await tx.query.memorizationTestSessions.findMany({
+        where: eq(memorizationTestSessions.userId, userId),
+      });
+      const sessionIds = sessions.map((s) => s.id);
+      if (sessionIds.length > 0) {
+        await tx.delete(memorizationResults).where(inArray(memorizationResults.sessionId, sessionIds));
+        await tx.delete(memorizationTestSessions).where(eq(memorizationTestSessions.userId, userId));
+      }
+      await tx.delete(weeklyTrainingRecords).where(eq(weeklyTrainingRecords.userId, userId));
+      await tx.delete(trainingRecords).where(eq(trainingRecords.userId, userId));
+      await tx.delete(users).where(eq(users.id, userId));
+    });
+
     res.json({ ok: true });
   })
 );
@@ -370,5 +450,92 @@ adminRouter.get(
       activeMembers: allMembers.filter((m) => m.status === "active").length,
       currentWeekAverageProgress: averageProgress,
     });
+  })
+);
+
+// 주차별(1주차, 2주차 ...) 통계 — 그룹마다 실제 날짜는 달라도 weekNumber는 그룹 간
+// 비교 가능한 상대 지표이므로 weekNumber 기준으로 묶어서 집계한다. 아직 그 주차에
+// 도달하지 않은 회원(currentWeek < weekNumber)은 해당 주차 집계에서 제외한다.
+adminRouter.get(
+  "/statistics/weekly",
+  asyncHandler(async (req, res) => {
+    const allMembers = await db.query.users.findMany({ where: eq(users.role, "member") });
+    const membersWithGroup = allMembers.filter((m) => m.groupId);
+
+    const currentWeeks = await Promise.all(
+      membersWithGroup.map(async (m) => ({
+        member: m,
+        currentWeek: (await getCurrentWeekForUser(m.id)).weekNumber,
+      }))
+    );
+    const maxWeek = currentWeeks.reduce((max, c) => Math.max(max, c.currentWeek), 0);
+
+    const weeks = [];
+    for (let weekNumber = 1; weekNumber <= maxWeek; weekNumber++) {
+      const eligible = currentWeeks.filter((c) => c.currentWeek >= weekNumber);
+      const memberProgress = await Promise.all(
+        eligible.map(async ({ member }) => {
+          const summary = await calculateWeeklySummary(member.id, weekNumber);
+          return { id: member.id, name: member.name, progress: summary.overallProgress };
+        })
+      );
+      const averageProgress =
+        memberProgress.length > 0
+          ? Math.round((memberProgress.reduce((sum, m) => sum + m.progress, 0) / memberProgress.length) * 10) / 10
+          : 0;
+      weeks.push({ weekNumber, averageProgress, members: memberProgress });
+    }
+
+    res.json({ weeks });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// 공지사항 관리 (활성 상태인 것만 회원 홈에 노출 — GET /api/announcements/active 참고)
+// ---------------------------------------------------------------------------
+adminRouter.get(
+  "/announcements",
+  asyncHandler(async (req, res) => {
+    const rows = await db.query.announcements.findMany({ orderBy: [desc(announcements.createdAt)] });
+    res.json({ announcements: rows });
+  })
+);
+
+const announcementCreateSchema = z.object({
+  title: z.string().min(1, "제목을 입력해주세요."),
+  content: z.string().min(1, "내용을 입력해주세요."),
+});
+
+adminRouter.post(
+  "/announcements",
+  asyncHandler(async (req, res) => {
+    const body = announcementCreateSchema.parse(req.body);
+    await db.insert(announcements).values({ ...body, createdBy: req.user!.userId });
+    res.json({ ok: true });
+  })
+);
+
+const announcementUpdateSchema = z.object({
+  title: z.string().min(1).optional(),
+  content: z.string().min(1).optional(),
+  isActive: z.boolean().optional(),
+});
+
+adminRouter.put(
+  "/announcements/:id",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const body = announcementUpdateSchema.parse(req.body);
+    await db.update(announcements).set(body).where(eq(announcements.id, id));
+    res.json({ ok: true });
+  })
+);
+
+adminRouter.delete(
+  "/announcements/:id",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    await db.delete(announcements).where(eq(announcements.id, id));
+    res.json({ ok: true });
   })
 );

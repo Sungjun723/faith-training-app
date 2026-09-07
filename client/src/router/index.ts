@@ -3,20 +3,36 @@ import { useAuthStore } from "@/stores/auth";
 
 const routes = [
   { path: "/login", name: "login", component: () => import("@/views/LoginView.vue"), meta: { public: true } },
-  { path: "/dashboard", name: "dashboard", component: () => import("@/views/DashboardView.vue") },
+  {
+    path: "/dashboard",
+    name: "dashboard",
+    component: () => import("@/views/DashboardView.vue"),
+    meta: { memberOnly: true },
+  },
   {
     path: "/calendar",
     name: "calendar",
     component: () => import("@/views/CalendarView.vue"),
-    meta: { fullWidth: true },
+    meta: { fullWidth: true, memberOnly: true },
   },
   {
     path: "/weekly-summary",
     name: "weekly-summary",
     component: () => import("@/views/WeeklySummaryView.vue"),
+    meta: { memberOnly: true },
   },
-  { path: "/profile", name: "profile", component: () => import("@/views/ProfileView.vue") },
-  { path: "/memorization", name: "memorization", component: () => import("@/views/MemorizationView.vue") },
+  {
+    path: "/profile",
+    name: "profile",
+    component: () => import("@/views/ProfileView.vue"),
+    meta: { memberOnly: true },
+  },
+  {
+    path: "/memorization",
+    name: "memorization",
+    component: () => import("@/views/MemorizationView.vue"),
+    meta: { memberOnly: true },
+  },
   {
     path: "/admin",
     name: "admin",
@@ -53,6 +69,12 @@ const routes = [
     component: () => import("@/views/admin/AdminStatisticsView.vue"),
     meta: { requiresAdmin: true },
   },
+  {
+    path: "/admin/announcements",
+    name: "admin-announcements",
+    component: () => import("@/views/admin/AdminAnnouncementsView.vue"),
+    meta: { requiresAdmin: true },
+  },
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
 ];
 
@@ -81,6 +103,11 @@ router.beforeEach(async (to) => {
   if (to.meta.requiresAdmin && !auth.isAdmin) {
     // 보안 경계는 서버가 담당. 이 redirect는 UX 목적.
     return { name: "dashboard" };
+  }
+
+  if (to.meta.memberOnly && auth.isAdmin) {
+    // 관리자는 회원 전용 화면(홈/캘린더/암송/Profile)을 쓰지 않는다 — UX 목적.
+    return { name: "admin" };
   }
 
   return true;

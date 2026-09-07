@@ -6,6 +6,7 @@ import { useTrainingStore } from "@/stores/training";
 import { useWeeklyStore } from "@/stores/weekly";
 import { toDateString, isSunday, formatKoreanDate } from "@/utils/date";
 import { useToast } from "@/composables/useToast";
+import { api } from "@/utils/api";
 import BaseCard from "@/components/common/BaseCard.vue";
 import BaseCheckbox from "@/components/common/BaseCheckbox.vue";
 import BaseInput from "@/components/common/BaseInput.vue";
@@ -26,6 +27,23 @@ const loading = ref(true);
 const loadError = ref(false);
 const weekNumber = ref<number | null>(null);
 
+interface Announcement {
+  id: number;
+  title: string;
+  content: string;
+  createdAt: string;
+}
+const announcements = ref<Announcement[]>([]);
+
+async function loadAnnouncements() {
+  try {
+    const { announcements: list } = await api.get<{ announcements: Announcement[] }>("/announcements/active");
+    announcements.value = list;
+  } catch {
+    announcements.value = [];
+  }
+}
+
 async function load() {
   loading.value = true;
   loadError.value = false;
@@ -34,6 +52,7 @@ async function load() {
     const week = await trainingStore.fetchCurrentWeek();
     weekNumber.value = week.weekNumber;
     await weeklyStore.fetchSummary(week.weekNumber);
+    await loadAnnouncements();
   } catch {
     loadError.value = true;
   } finally {
@@ -85,6 +104,16 @@ async function toggleReading(value: boolean) {
     <template v-else>
     <h1 class="dashboard__greeting">{{ auth.user?.name }}님, 안녕하세요 👋</h1>
     <p class="dashboard__date">{{ formatKoreanDate(todayStr) }}</p>
+
+    <BaseCard
+      v-for="a in announcements"
+      :key="a.id"
+      class="dashboard__section dashboard__announcement"
+    >
+      <p class="dashboard__announcement-label">📢 공지사항</p>
+      <h2 class="dashboard__announcement-title">{{ a.title }}</h2>
+      <p class="dashboard__announcement-content">{{ a.content }}</p>
+    </BaseCard>
 
     <BaseCard class="dashboard__section">
       <h2 class="dashboard__section-title">오늘의 훈련</h2>
@@ -154,6 +183,26 @@ async function toggleReading(value: boolean) {
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-bold);
   margin: 0 0 var(--space-4);
+}
+.dashboard__announcement {
+  background: var(--color-primary-light);
+}
+.dashboard__announcement-label {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+}
+.dashboard__announcement-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+}
+.dashboard__announcement-content {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
 }
 .dashboard__today-item {
   padding: var(--space-2) 0;
