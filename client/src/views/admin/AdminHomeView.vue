@@ -57,6 +57,9 @@ onMounted(load);
       <RouterLink class="admin-home__link" :to="{ name: 'admin-members' }">
         <Icon name="users" :size="18" /> 회원 관리
       </RouterLink>
+      <RouterLink class="admin-home__link" :to="{ name: 'admin-groups' }">
+        <Icon name="calendar" :size="18" /> 그룹 관리
+      </RouterLink>
       <RouterLink class="admin-home__link" :to="{ name: 'admin-memorization' }">
         <Icon name="book" :size="18" /> 암송 구절 관리
       </RouterLink>

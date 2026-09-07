@@ -11,12 +11,14 @@ GET    /api/auth/me             → 현재 로그인 사용자 정보
 
 ### Training (일별/주간)
 ```
-GET    /api/training/month?year=&month=      → 해당 월 전체 record 배열 (캘린더 렌더용, 1회 호출)
-PUT    /api/training/daily/:date             → upsert { meditation_completed?, prayer_minutes?, reading_pages? }
-                                                (일요일 + meditation_completed=true 요청 시 400 반환)
-GET    /api/training/weekly/:weekId
-PUT    /api/training/weekly/:weekId          → upsert 주간 항목 체크
-GET    /api/training/weekly/:weekId/summary  → 계산된 진행률/통계 (services/weeklyProgress.ts 사용)
+GET    /api/training/month?year=&month=            → 해당 월 전체 record 배열 (캘린더 렌더용, 1회 호출)
+PUT    /api/training/daily/:date                    → upsert { meditation_completed?, prayer_minutes?, reading_pages? }
+                                                       (일요일 + meditation_completed=true 요청 시 400 반환)
+GET    /api/training/weekly/:weekNumber
+PUT    /api/training/weekly/:weekNumber             → upsert 주간 항목 체크
+GET    /api/training/weekly/:weekNumber/summary     → 계산된 진행률/통계 (요청자의 그룹 기준으로 weekNumber 해석)
+GET    /api/training/current-week                   → 내 그룹 기준 "이번 주" { weekNumber, weekStart, weekEnd }
+GET    /api/training/week-for-date?date=            → 특정 날짜가 내 그룹 기준 몇 주차인지
 ```
 
 ### Profile
@@ -26,33 +28,43 @@ GET    /api/profile/me   → 이름/이메일/가입일/이번주·이번달 진
 
 ### Memorization (member)
 ```
-GET    /api/memorization/weeks                     → 주차 목록 + 각 주차별 신규/누적 구절 수 + 현재 주차
-GET    /api/memorization/passages?uptoWeekId=       → 누적 구절 목록
-POST   /api/memorization/sessions                   → { scopeWeekId, testType } → 세션 생성, in_progress 세션 있으면 재사용
+GET    /api/memorization/weeks                      → 1주차~내 현재 주차까지 옵션 목록(주차별 누적 구절 수) + 현재 주차
+GET    /api/memorization/passages?uptoWeek=          → 누적 구절 목록 (주차 번호 기준, 그룹 무관 공통)
+POST   /api/memorization/sessions                    → { scopeWeekNumber, testType } → 세션 생성
+                                                        (범위+방식이 모두 같은 in_progress 세션만 재사용)
 GET    /api/memorization/sessions/:id
-POST   /api/memorization/sessions/:id/results       → { passageId, userInput? } → 채점 후 결과 저장
-POST   /api/memorization/sessions/:id/complete      → 세션 완료 처리 + average_score 계산
-GET    /api/memorization/sessions?status=completed  → 이력 조회
+POST   /api/memorization/sessions/:id/results        → { passageId, userInput? | blanks?,answers? } → 채점 후 결과 저장
+POST   /api/memorization/sessions/:id/complete       → 세션 완료 처리 + average_score 계산
+GET    /api/memorization/sessions?status=completed   → 이력 조회
+GET    /api/memorization/settings                    → 빈칸 암송 간격(blankInterval) 조회
 ```
 
 ### Admin
 ```
 GET    /api/admin/members
-POST   /api/admin/members                     → 신규 회원 추가 { name, email, password, role? }
-GET    /api/admin/members/:id                 → 일별/주간/암송 상세
+POST   /api/admin/members                     → 신규 회원 추가 { name, email, password, role?, groupId }
+                                                 (role='member'인데 groupId 없으면 400)
+GET    /api/admin/members/:id                 → 일별/주간/암송 상세 (그룹 미배정 시 weeklySummary는 null)
 PATCH  /api/admin/members/:id/password        → 관리자가 회원 비밀번호 직접 재설정 { newPassword }
 PATCH  /api/admin/members/:id/status          → active/inactive 전환
+PATCH  /api/admin/members/:id/group           → 회원의 그룹 재배정 { groupId }
 
-GET    /api/admin/weeks
-POST   /api/admin/weeks                       → 새 주차 생성
+GET    /api/admin/groups                      → 그룹 목록 + 그룹별 회원 수
+POST   /api/admin/groups                      → 그룹 생성 { name, startDate }
+PUT    /api/admin/groups/:id                  → 그룹 수정
+DELETE /api/admin/groups/:id                  → 그룹 삭제 (소속 회원 있으면 400)
 
-GET    /api/admin/memorization/passages?weekId=
-POST   /api/admin/memorization/passages
+GET    /api/admin/memorization/weeks          → 구절이 등록된 주차 번호 목록 (chip UI용)
+GET    /api/admin/memorization/passages?weekNumber=
+POST   /api/admin/memorization/passages       → { weekNumber, book, chapterVerse, content, displayOrder }
 PUT    /api/admin/memorization/passages/:id
 DELETE /api/admin/memorization/passages/:id
 PATCH  /api/admin/memorization/passages/reorder   → [{ id, display_order }]
 
-GET    /api/admin/statistics
+GET    /api/admin/settings                     → 빈칸 암송 간격 조회
+PUT    /api/admin/settings                     → 빈칸 암송 간격 변경 { blankInterval: 2~10 }
+
+GET    /api/admin/statistics                   → 그룹이 배정된 회원만 집계에 포함
 ```
 
 모든 `admin/*`는 `requireAuth + requireAdmin` 미들웨어 통과 필요. 모든 회원용 API는 `req.user.id`만 사용 — 요청 파라미터로 다른 사용자 데이터 조회 불가.

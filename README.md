@@ -13,6 +13,43 @@
 
 ---
 
+## ⚠️ 그룹 기반 주차 구조로 변경됨 (breaking schema change)
+
+기존에 있던 전역 공유 `weeks` 테이블을 제거하고, **그룹(`groups`)별 시작일 기준으로
+주차를 계산**하는 방식으로 바뀌었습니다. `users.group_id`가 추가되었고,
+`weekly_training_records` / `memorization_passages` / `memorization_test_sessions`의
+컬럼 구조도 바뀌었습니다 (자세한 내용은 `docs/database-schema.md` 참고).
+
+**이미 이전 스키마로 마이그레이션을 적용한 DB가 있다면, 아래 순서로 초기화 후 다시
+적용해야 합니다** (테이블 구조 자체가 바뀌어 증분 마이그레이션이 어렵습니다):
+
+```sql
+-- Hostinger MySQL / phpMyAdmin 등에서 실행
+DROP TABLE IF EXISTS memorization_results;
+DROP TABLE IF EXISTS memorization_test_sessions;
+DROP TABLE IF EXISTS memorization_passages;
+DROP TABLE IF EXISTS weekly_training_records;
+DROP TABLE IF EXISTS training_records;
+DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS app_settings;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS groups;
+DROP TABLE IF EXISTS weeks;              -- 이전 버전에서 생성됐던 테이블 (있다면)
+DROP TABLE IF EXISTS password_reset_tokens; -- 더 이전 버전 (있다면)
+```
+
+이후 아래를 실행:
+```bash
+npm run db:migrate
+npm run db:seed
+```
+
+`db:seed`가 기본 관리자 계정과 샘플 그룹("기본 그룹", 이번 주 월요일 시작)을 만들어줍니다.
+실제 운영할 그룹(예: "그룹 A" 8/31 시작, "그룹 B" 8/3 시작)은 로그인 후
+**관리자 → 그룹 관리**에서 직접 추가하면 됩니다.
+
+---
+
 ## 로컬 개발 환경 설정
 
 ### 1. 사전 준비
@@ -41,7 +78,7 @@ cp server/.env.example server/.env
 cd server
 npx drizzle-kit generate   # 스키마 변경 시 마이그레이션 파일 생성 (이미 0000_*.sql 존재)
 npm run db:migrate          # 마이그레이션 적용
-npm run db:seed             # 초기 관리자 계정 + 샘플 암송 구절 생성
+npm run db:seed             # 초기 관리자 계정 + 샘플 그룹 + 샘플 암송 구절 생성
 ```
 
 시드 스크립트 실행 후 콘솔에 출력되는 관리자 이메일/비밀번호로 로그인한다. 이후 회원의 비밀번호를 잊어버린 경우, 관리자가 "관리자 > 회원 관리 > 회원 상세" 화면에서 새 비밀번호를 직접 입력해 재설정할 수 있다 (이메일 발송 없이 즉시 반영).
@@ -134,3 +171,5 @@ server/dist/    # 컴파일된 Express 서버
 - 빈칸 암송 간격은 관리자 화면(암송 구절 관리 > 빈칸 암송 간격)에서 2~10 사이로 조정 가능 (기본 3)
 - `audit_logs` 테이블은 스키마만 준비되어 있고 실제 기록 로직은 아직 연결되지 않음
 - 비밀번호는 이메일 재설정 대신 관리자가 회원 상세 화면에서 직접 재설정하는 방식으로 구현되어 있음
+- 그룹은 삭제 시 소속 회원이 있으면 차단되며, 회원의 그룹 재배정은 관리자 > 회원 상세에서 가능
+- 그룹 시작일은 요일 제한이 없음 — 어떤 요일로 시작해도 "일요일 묵상 제외 + 6일 집계" 로직이 정확히 동작하도록 일반화되어 있음 (`docs/database-schema.md`의 주차 계산 방식 참고)

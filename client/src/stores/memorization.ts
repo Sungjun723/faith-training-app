@@ -2,15 +2,13 @@ import { defineStore } from "pinia";
 import { api } from "@/utils/api";
 
 export interface MemorizationWeekOption {
-  id: number;
   weekNumber: number;
-  weekStart: string;
   cumulativePassageCount: number;
 }
 
 export interface Passage {
   id: number;
-  weekId: number;
+  weekNumber: number;
   book: string;
   chapterVerse: string;
   content: string;
@@ -22,7 +20,7 @@ export type TestType = "full_recite" | "fill_blank" | "full_input";
 export interface Session {
   id: number;
   userId: number;
-  scopeWeekId: number;
+  scopeWeekNumber: number;
   testType: TestType;
   totalPassages: number;
   status: "in_progress" | "completed";
@@ -38,7 +36,7 @@ export interface DiffItem {
 export const useMemorizationStore = defineStore("memorization", {
   state: () => ({
     weekOptions: [] as MemorizationWeekOption[],
-    currentWeekId: null as number | null,
+    currentWeekNumber: null as number | null,
     activeSession: null as Session | null,
     passages: [] as Passage[],
     currentIndex: 0,
@@ -62,25 +60,25 @@ export const useMemorizationStore = defineStore("memorization", {
       return blankInterval;
     },
     async fetchWeekOptions() {
-      const { weeks, currentWeekId } = await api.get<{
-        weeks: MemorizationWeekOption[];
-        currentWeekId: number;
+      const { weekOptions, currentWeekNumber } = await api.get<{
+        weekOptions: MemorizationWeekOption[];
+        currentWeekNumber: number;
       }>("/memorization/weeks");
-      this.weekOptions = weeks;
-      this.currentWeekId = currentWeekId;
-      return weeks;
+      this.weekOptions = weekOptions;
+      this.currentWeekNumber = currentWeekNumber;
+      return weekOptions;
     },
-    async startSession(scopeWeekId: number, testType: TestType) {
+    async startSession(scopeWeekNumber: number, testType: TestType) {
       // 이전 테스트가 끝난 뒤 마지막 문항의 채점 결과가 store에 남아있으면,
       // 새 세션의 첫 문항이 뜨기도 전에 그 결과 화면이 먼저 보이는 버그가 있었다.
       this.lastResult = null;
       const { session } = await api.post<{ session: Session; resumed: boolean }>("/memorization/sessions", {
-        scopeWeekId,
+        scopeWeekNumber,
         testType,
       });
       this.activeSession = session;
       const { passages } = await api.get<{ passages: Passage[] }>(
-        `/memorization/passages?uptoWeekId=${session.scopeWeekId}`
+        `/memorization/passages?uptoWeek=${session.scopeWeekNumber}`
       );
       this.passages = passages;
       this.currentIndex = 0;

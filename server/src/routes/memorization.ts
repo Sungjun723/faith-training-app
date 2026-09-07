@@ -1,16 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
-import { and, asc, eq, inArray, lte } from "drizzle-orm";
+import { and, asc, eq, lte } from "drizzle-orm";
 import { db } from "../db/client.js";
-import {
-  memorizationPassages,
-  memorizationResults,
-  memorizationTestSessions,
-  weeks,
-} from "../db/schema.js";
+import { memorizationPassages, memorizationResults, memorizationTestSessions } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
-import { getCurrentWeek, getWeekById } from "../services/weeks.js";
+import { getCurrentWeekForUser } from "../services/groupWeeks.js";
 import { diffMemorization, scoreFillBlank, scoreFromDiff } from "../services/memorizationDiff.js";
 import { getSettings } from "../services/settings.js";
 
@@ -26,71 +21,59 @@ memorizationRouter.get(
   })
 );
 
-/** scopeWeekId까지(누적) 등록된 구절 목록을 순서대로 반환 */
-async function getPassagesUpToWeek(scopeWeekId: number) {
-  const scopeWeek = await getWeekById(scopeWeekId);
-  const weeksUpTo = await db.query.weeks.findMany({
-    where: lte(weeks.weekNumber, scopeWeek.weekNumber),
-  });
-  const weekIds = weeksUpTo.map((w) => w.id);
-  if (weekIds.length === 0) return [];
-
+/** scopeWeekNumber까지(누적) 등록된 구절 목록을 순서대로 반환.
+ *  구절은 그룹과 무관하게 순수 주차 번호로만 관리되므로 그룹 A/B 상관없이 동일하다. */
+async function getPassagesUpToWeek(scopeWeekNumber: number) {
   return db.query.memorizationPassages.findMany({
-    where: inArray(memorizationPassages.weekId, weekIds),
-    orderBy: [asc(memorizationPassages.weekId), asc(memorizationPassages.displayOrder)],
+    where: lte(memorizationPassages.weekNumber, scopeWeekNumber),
+    orderBy: [asc(memorizationPassages.weekNumber), asc(memorizationPassages.displayOrder)],
   });
 }
 
 // 주차 목록 + 각 주차까지의 누적 구절 수 (문서 18번 Step 1 UI용)
+// "현재 주차"는 요청한 사용자가 속한 그룹의 시작일 기준으로 계산된다.
 memorizationRouter.get(
   "/weeks",
   asyncHandler(async (req, res) => {
-    const allWeeks = await db.query.weeks.findMany({ orderBy: [asc(weeks.weekNumber)] });
-    const currentWeek = await getCurrentWeek();
+    const currentWeek = await getCurrentWeekForUser(req.user!.userId);
 
-    const result = await Promise.all(
-      allWeeks.map(async (w) => {
-        const passages = await getPassagesUpToWeek(w.id);
-        return {
-          id: w.id,
-          weekNumber: w.weekNumber,
-          weekStart: w.weekStart,
-          cumulativePassageCount: passages.length,
-        };
+    const weekOptions = await Promise.all(
+      Array.from({ length: currentWeek.weekNumber }, (_, i) => i + 1).map(async (weekNumber) => {
+        const passages = await getPassagesUpToWeek(weekNumber);
+        return { weekNumber, cumulativePassageCount: passages.length };
       })
     );
 
-    res.json({ weeks: result, currentWeekId: currentWeek.id });
+    res.json({ weekOptions, currentWeekNumber: currentWeek.weekNumber });
   })
 );
 
 const passagesQuerySchema = z.object({
-  uptoWeekId: z.coerce.number().int(),
+  uptoWeek: z.coerce.number().int(),
 });
 
 memorizationRouter.get(
   "/passages",
   asyncHandler(async (req, res) => {
-    const { uptoWeekId } = passagesQuerySchema.parse(req.query);
-    const passages = await getPassagesUpToWeek(uptoWeekId);
+    const { uptoWeek } = passagesQuerySchema.parse(req.query);
+    const passages = await getPassagesUpToWeek(uptoWeek);
     res.json({ passages });
   })
 );
 
 const createSessionSchema = z.object({
-  scopeWeekId: z.number().int(),
+  scopeWeekNumber: z.number().int().min(1),
   testType: z.enum(["full_recite", "fill_blank", "full_input"]),
 });
 
 memorizationRouter.post(
   "/sessions",
   asyncHandler(async (req, res) => {
-    const { scopeWeekId, testType } = createSessionSchema.parse(req.body);
+    const { scopeWeekNumber, testType } = createSessionSchema.parse(req.body);
 
     // 이미 진행 중인 세션이 있으면 재사용한다 (이탈 후 재접속 시나리오, 문서 32번).
-    // 단, 범위(scopeWeekId)나 테스트 방식(testType)이 다르면 다른 테스트를 새로 시작하려는
-    // 것이므로 재사용하지 않는다 — 재사용할 경우 클라이언트가 요청한 testType과
-    // 실제 세션의 testType이 어긋나 채점 결과 스냅샷 구조가 맞지 않는 문제가 있었다.
+    // 단, 범위(scopeWeekNumber)나 테스트 방식(testType)이 다르면 다른 테스트를 새로
+    // 시작하려는 것이므로 재사용하지 않는다.
     const inProgress = await db.query.memorizationTestSessions.findFirst({
       where: and(
         eq(memorizationTestSessions.userId, req.user!.userId),
@@ -98,24 +81,23 @@ memorizationRouter.post(
       ),
     });
     if (inProgress) {
-      if (inProgress.scopeWeekId === scopeWeekId && inProgress.testType === testType) {
+      if (inProgress.scopeWeekNumber === scopeWeekNumber && inProgress.testType === testType) {
         return res.json({ session: inProgress, resumed: true });
       }
-      // 더 이상 이어가지 않을 이전 세션은 정리한다 (미완료 상태로 방치되지 않도록).
       await db
         .update(memorizationTestSessions)
         .set({ status: "completed", completedAt: new Date() })
         .where(eq(memorizationTestSessions.id, inProgress.id));
     }
 
-    const passages = await getPassagesUpToWeek(scopeWeekId);
+    const passages = await getPassagesUpToWeek(scopeWeekNumber);
     if (passages.length === 0) {
       throw new AppError("해당 범위에 등록된 암송 구절이 없습니다.", 400);
     }
 
     await db.insert(memorizationTestSessions).values({
       userId: req.user!.userId,
-      scopeWeekId,
+      scopeWeekNumber,
       testType,
       totalPassages: passages.length,
     });
@@ -143,7 +125,7 @@ memorizationRouter.get(
   "/sessions/:id",
   asyncHandler(async (req, res) => {
     const session = await loadSessionOrThrow(Number(req.params.id), req.user!.userId);
-    const passages = await getPassagesUpToWeek(session.scopeWeekId);
+    const passages = await getPassagesUpToWeek(session.scopeWeekNumber);
     const results = await db.query.memorizationResults.findMany({
       where: eq(memorizationResults.sessionId, session.id),
     });

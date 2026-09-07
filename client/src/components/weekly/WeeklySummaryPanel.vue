@@ -8,23 +8,23 @@ import WeeklyChecklist from "@/components/weekly/WeeklyChecklist.vue";
 import LoadingState from "@/components/common/LoadingState.vue";
 import ErrorState from "@/components/common/ErrorState.vue";
 
-const props = defineProps<{ weekId: number | null }>();
+const props = defineProps<{ weekNumber: number | null }>();
 
 const weeklyStore = useWeeklyStore();
 const toast = useToast();
 
 async function load() {
-  if (props.weekId) await weeklyStore.fetchSummary(props.weekId, true);
+  if (props.weekNumber) await weeklyStore.fetchSummary(props.weekNumber, true);
 }
 
-watch(() => props.weekId, load, { immediate: true });
+watch(() => props.weekNumber, load, { immediate: true });
 
-const summary = computed(() => (props.weekId ? weeklyStore.summaries[props.weekId] : undefined));
+const summary = computed(() => (props.weekNumber ? weeklyStore.summaries[props.weekNumber] : undefined));
 
 async function handleToggle(key: WeeklyFlagKey, value: boolean) {
-  if (!props.weekId) return;
+  if (!props.weekNumber) return;
   try {
-    await weeklyStore.toggleFlag(props.weekId, key, value);
+    await weeklyStore.toggleFlag(props.weekNumber, key, value);
     toast.success("✓ 저장되었습니다.");
   } catch {
     toast.error("저장하지 못했습니다. 다시 시도해주세요.");
@@ -33,7 +33,7 @@ async function handleToggle(key: WeeklyFlagKey, value: boolean) {
 </script>
 
 <template>
-  <LoadingState v-if="weekId && !summary" message="주간 결산을 불러오는 중입니다..." />
+  <LoadingState v-if="weekNumber && !summary" message="주간 결산을 불러오는 중입니다..." />
   <div class="weekly-panel" v-else-if="summary">
     <h2 class="weekly-panel__title">
       {{ summary.week.weekNumber }}주차 결산

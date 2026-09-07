@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
-import { api } from "@/utils/api";
+import { api, ApiError } from "@/utils/api";
 import type { WeeklySummary } from "@/stores/weekly";
 import BaseCard from "@/components/common/BaseCard.vue";
 import BaseButton from "@/components/common/BaseButton.vue";
@@ -11,13 +11,27 @@ import ErrorState from "@/components/common/ErrorState.vue";
 import { useToast } from "@/composables/useToast";
 
 interface Detail {
-  user: { id: number; name: string; email: string; status: "active" | "inactive" };
-  weeklySummary: WeeklySummary;
+  user: {
+    id: number;
+    name: string;
+    email: string;
+    status: "active" | "inactive";
+    groupId: number | null;
+    groupName: string | null;
+  };
+  weeklySummary: WeeklySummary | null;
   recentDaily: { recordDate: string; meditationCompleted: boolean; prayerMinutes: number; readingPages: number }[];
+}
+
+interface Group {
+  id: number;
+  name: string;
+  startDate: string;
 }
 
 const route = useRoute();
 const detail = ref<Detail | null>(null);
+const groups = ref<Group[]>([]);
 const loading = ref(true);
 const loadError = ref(false);
 
@@ -25,7 +39,13 @@ async function load() {
   loading.value = true;
   loadError.value = false;
   try {
-    detail.value = await api.get<Detail>(`/admin/members/${route.params.id}`);
+    const [d, { groups: groupList }] = await Promise.all([
+      api.get<Detail>(`/admin/members/${route.params.id}`),
+      api.get<{ groups: Group[] }>("/admin/groups"),
+    ]);
+    detail.value = d;
+    groups.value = groupList;
+    selectedGroupId.value = d.user.groupId;
   } catch {
     loadError.value = true;
   } finally {
@@ -62,6 +82,23 @@ async function resetPassword() {
     resettingPassword.value = false;
   }
 }
+
+const selectedGroupId = ref<number | null>(null);
+const changingGroup = ref(false);
+
+async function changeGroup() {
+  if (!detail.value || !selectedGroupId.value) return;
+  changingGroup.value = true;
+  try {
+    await api.patch(`/admin/members/${detail.value.user.id}/group`, { groupId: selectedGroupId.value });
+    toast.success("그룹이 변경되었습니다.");
+    await load();
+  } catch (err) {
+    toast.error(err instanceof ApiError ? err.message : "그룹 변경에 실패했습니다.");
+  } finally {
+    changingGroup.value = false;
+  }
+}
 </script>
 
 <template>
@@ -72,7 +109,19 @@ async function resetPassword() {
     <p class="admin-member-detail__email">{{ detail.user.email }}</p>
 
     <BaseCard class="admin-member-detail__section">
-      <h2 class="admin-member-detail__section-title">이번 주 진행률</h2>
+      <h2 class="admin-member-detail__section-title">그룹</h2>
+      <div class="admin-member-detail__group-row">
+        <select v-model.number="selectedGroupId">
+          <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }} ({{ g.startDate }} 시작)</option>
+        </select>
+        <BaseButton size="sm" :disabled="changingGroup || selectedGroupId === detail.user.groupId" @click="changeGroup">
+          변경
+        </BaseButton>
+      </div>
+    </BaseCard>
+
+    <BaseCard class="admin-member-detail__section" v-if="detail.weeklySummary">
+      <h2 class="admin-member-detail__section-title">이번 주 진행률 ({{ detail.weeklySummary.week.weekNumber }}주차)</h2>
       <p class="admin-member-detail__progress">{{ detail.weeklySummary.overallProgress }}%</p>
     </BaseCard>
 
@@ -135,6 +184,19 @@ async function resetPassword() {
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
   color: var(--color-primary);
+}
+.admin-member-detail__group-row {
+  display: flex;
+  gap: var(--space-3);
+}
+.admin-member-detail__group-row select {
+  flex: 1;
+  min-height: var(--touch-target-min);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 .admin-member-detail__table {
   width: 100%;

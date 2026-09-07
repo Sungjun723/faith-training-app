@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "e185ae64-18ef-49cd-980c-78c27123b39b",
+  "id": "ff109e2c-d821-4795-8f0d-f6483443e49c",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "app_settings": {
@@ -124,6 +124,67 @@
       },
       "uniqueConstraints": {}
     },
+    "groups": {
+      "name": "groups",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "start_date": {
+          "name": "start_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "groups_id": {
+          "name": "groups_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "groups_name_unique": {
+          "name": "groups_name_unique",
+          "columns": [
+            "name"
+          ]
+        }
+      }
+    },
     "memorization_passages": {
       "name": "memorization_passages",
       "columns": {
@@ -134,8 +195,8 @@
           "notNull": true,
           "autoincrement": true
         },
-        "week_id": {
-          "name": "week_id",
+        "week_number": {
+          "name": "week_number",
           "type": "int",
           "primaryKey": false,
           "notNull": true,
@@ -189,21 +250,7 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "memorization_passages_week_id_weeks_id_fk": {
-          "name": "memorization_passages_week_id_weeks_id_fk",
-          "tableFrom": "memorization_passages",
-          "tableTo": "weeks",
-          "columnsFrom": [
-            "week_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {
         "memorization_passages_id": {
           "name": "memorization_passages_id",
@@ -340,8 +387,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "scope_week_id": {
-          "name": "scope_week_id",
+        "scope_week_number": {
+          "name": "scope_week_number",
           "type": "int",
           "primaryKey": false,
           "notNull": true,
@@ -400,19 +447,6 @@
           "tableTo": "users",
           "columnsFrom": [
             "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "memorization_test_sessions_scope_week_id_weeks_id_fk": {
-          "name": "memorization_test_sessions_scope_week_id_weeks_id_fk",
-          "tableFrom": "memorization_test_sessions",
-          "tableTo": "weeks",
-          "columnsFrom": [
-            "scope_week_id"
           ],
           "columnsTo": [
             "id"
@@ -570,6 +604,13 @@
           "autoincrement": false,
           "default": "'member'"
         },
+        "group_id": {
+          "name": "group_id",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "profile_image": {
           "name": "profile_image",
           "type": "varchar(500)",
@@ -604,7 +645,21 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "users_group_id_groups_id_fk": {
+          "name": "users_group_id_groups_id_fk",
+          "tableFrom": "users",
+          "tableTo": "groups",
+          "columnsFrom": [
+            "group_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {
         "users_id": {
           "name": "users_id",
@@ -639,8 +694,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "week_id": {
-          "name": "week_id",
+        "week_number": {
+          "name": "week_number",
           "type": "int",
           "primaryKey": false,
           "notNull": true,
@@ -734,19 +789,6 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
-        },
-        "weekly_training_records_week_id_weeks_id_fk": {
-          "name": "weekly_training_records_week_id_weeks_id_fk",
-          "tableFrom": "weekly_training_records",
-          "tableTo": "weeks",
-          "columnsFrom": [
-            "week_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -762,72 +804,7 @@
           "name": "uq_user_week",
           "columns": [
             "user_id",
-            "week_id"
-          ]
-        }
-      }
-    },
-    "weeks": {
-      "name": "weeks",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "week_number": {
-          "name": "week_number",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "week_start": {
-          "name": "week_start",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "week_end": {
-          "name": "week_end",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "weeks_id": {
-          "name": "weeks_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {
-        "weeks_week_number_unique": {
-          "name": "weeks_week_number_unique",
-          "columns": [
             "week_number"
-          ]
-        },
-        "weeks_week_start_unique": {
-          "name": "weeks_week_start_unique",
-          "columns": [
-            "week_start"
           ]
         }
       }

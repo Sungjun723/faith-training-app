@@ -19,6 +19,14 @@ export function normalizeForScoring(text: string): string[] {
 /**
  * 단어 배열의 LCS(최장 공통 부분수열) 길이표를 만들고,
  * 이를 역추적하여 correct / wrong / missing diff를 생성한다.
+ *
+ * 역추적은 우선 match(일치) / delete(정답에만 있음) / insert(입력에만 있음)
+ * 세 종류의 원시 연산으로 분해한 뒤, 연속된 delete/insert 구간을 한 번 더
+ * 후처리하여 "같은 위치의 대체(substitution)"를 wrong으로 묶어낸다.
+ * (이전 버전은 insert를 만났을 때 expected 포인터를 옮기지 않은 채 바로
+ *  wrong으로 표시해버려서, 사용자가 단어를 하나 더 입력했을 뿐인데도
+ *  멀쩡한 정답 단어가 correct/wrong 두 번 중복 표시되며 점수가 부정확하게
+ *  깎이는 버그가 있었다.)
  */
 export function diffMemorization(correctText: string, userText: string): DiffItem[] {
   const expected = normalizeForScoring(correctText);
@@ -38,32 +46,67 @@ export function diffMemorization(correctText: string, userText: string): DiffIte
     }
   }
 
-  // 역추적 (뒤에서 앞으로) 후 뒤집기
-  const reversedDiff: DiffItem[] = [];
+  type RawOp = { type: "match" | "delete"; word: string } | { type: "insert"; word: string };
+  const reversedOps: RawOp[] = [];
   let i = n;
   let j = m;
   while (i > 0 && j > 0) {
     if (expected[i - 1] === actual[j - 1]) {
-      reversedDiff.push({ type: "correct", text: expected[i - 1] });
+      reversedOps.push({ type: "match", word: expected[i - 1] });
       i--;
       j--;
     } else if (dp[i - 1][j] >= dp[i][j - 1]) {
-      // 정답 단어가 사용자 입력에 없음 (또는 다른 단어로 대체되었을 가능성)
-      reversedDiff.push({ type: "missing", expected: expected[i - 1] });
+      // 정답에만 있는 단어 (삭제됨)
+      reversedOps.push({ type: "delete", word: expected[i - 1] });
       i--;
     } else {
-      // 사용자가 입력했지만 정답에 없는 단어 → 가장 가까운 정답 단어와 짝지어 wrong 처리
-      reversedDiff.push({ type: "wrong", expected: expected[i - 1] ?? "", actual: actual[j - 1] });
+      // 사용자 입력에만 있는 단어 (추가로 입력됨)
+      reversedOps.push({ type: "insert", word: actual[j - 1] });
       j--;
     }
   }
   while (i > 0) {
-    reversedDiff.push({ type: "missing", expected: expected[i - 1] });
+    reversedOps.push({ type: "delete", word: expected[i - 1] });
     i--;
   }
-  // 남은 사용자 입력 단어는 채점에 영향 주지 않음 (정답보다 많이 입력한 경우)
+  while (j > 0) {
+    reversedOps.push({ type: "insert", word: actual[j - 1] });
+    j--;
+  }
+  const ops = reversedOps.reverse();
 
-  return reversedDiff.reverse();
+  // 연속된 delete/insert 구간을 순서대로 짝지어 wrong(대체)으로 만들고,
+  // 짝이 안 맞는 delete는 missing, 짝이 안 맞는 insert(정답보다 더 입력한 단어)는
+  // 채점에 영향을 주지 않도록 조용히 버린다.
+  const diff: DiffItem[] = [];
+  let deleteBuffer: string[] = [];
+  let insertBuffer: string[] = [];
+
+  function flushBuffers() {
+    const pairCount = Math.min(deleteBuffer.length, insertBuffer.length);
+    for (let k = 0; k < pairCount; k++) {
+      diff.push({ type: "wrong", expected: deleteBuffer[k], actual: insertBuffer[k] });
+    }
+    for (let k = pairCount; k < deleteBuffer.length; k++) {
+      diff.push({ type: "missing", expected: deleteBuffer[k] });
+    }
+    deleteBuffer = [];
+    insertBuffer = [];
+  }
+
+  for (const op of ops) {
+    if (op.type === "match") {
+      flushBuffers();
+      diff.push({ type: "correct", text: op.word });
+    } else if (op.type === "delete") {
+      deleteBuffer.push(op.word);
+    } else {
+      insertBuffer.push(op.word);
+    }
+  }
+  flushBuffers();
+
+  return diff;
 }
 
 export function scoreFromDiff(diff: DiffItem[]): {

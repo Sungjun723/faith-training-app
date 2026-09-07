@@ -11,7 +11,6 @@ export interface DailyRecord {
 }
 
 interface CurrentWeek {
-  id: number;
   weekNumber: number;
   weekStart: string;
   weekEnd: string;

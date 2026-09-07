@@ -21,7 +21,7 @@ const router = useRouter();
 const step = ref<Step>("scope");
 const loading = ref(true);
 const loadError = ref(false);
-const scopeWeekId = ref<number | null>(null);
+const scopeWeekNumber = ref<number | null>(null);
 const finalSummary = ref<{
   totalPassages: number;
   averageScore: number | null;
@@ -44,15 +44,15 @@ async function load() {
 
 onMounted(load);
 
-function handleScopeConfirm(weekId: number) {
-  scopeWeekId.value = weekId;
+function handleScopeConfirm(weekNumber: number) {
+  scopeWeekNumber.value = weekNumber;
   step.value = "type";
 }
 
 async function handleTypeSelect(testType: TestType) {
-  if (!scopeWeekId.value) return;
+  if (!scopeWeekNumber.value) return;
   try {
-    await store.startSession(scopeWeekId.value, testType);
+    await store.startSession(scopeWeekNumber.value, testType);
     step.value = "test";
   } catch (err: any) {
     toast.error(err?.message ?? "테스트를 시작하지 못했습니다.");
@@ -95,7 +95,7 @@ async function handleNext() {
 
 function restart() {
   step.value = "scope";
-  scopeWeekId.value = null;
+  scopeWeekNumber.value = null;
   finalSummary.value = null;
 }
 
@@ -113,7 +113,7 @@ function goDashboard() {
       <ScopeStep
         v-if="step === 'scope'"
         :week-options="store.weekOptions"
-        :current-week-id="store.currentWeekId"
+        :current-week-number="store.currentWeekNumber"
         @confirm="handleScopeConfirm"
       />
 

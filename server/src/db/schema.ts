@@ -14,6 +14,20 @@ import {
 import { relations } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
+// groups (그룹 — 시작일을 공유하는 학생 단위)
+// ---------------------------------------------------------------------------
+export const groups = mysqlTable("groups", {
+  id: int("id").primaryKey().autoincrement(),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  // 그룹의 "1주차"가 시작되는 기준일. 내부적으로 이 날짜가 속한 주의 월요일을
+  // 앵커로 사용해 이후 모든 주차 계산의 기준으로 삼는다 (묵상 월~토/일요일 제외
+  // 로직과의 정합성을 위해 — services/groupWeeks.ts 참고).
+  startDate: date("start_date", { mode: "string" }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+});
+
+// ---------------------------------------------------------------------------
 // users
 // ---------------------------------------------------------------------------
 export const users = mysqlTable("users", {
@@ -22,21 +36,13 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 255 }).notNull().unique(),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   role: mysqlEnum("role", ["member", "admin"]).notNull().default("member"),
+  // 일반 회원(member)은 반드시 그룹에 속해야 한다 (애플리케이션 레벨에서 강제).
+  // 관리자 계정은 그룹이 없을 수 있어 컬럼 자체는 NULL 허용.
+  groupId: int("group_id").references(() => groups.id),
   profileImage: varchar("profile_image", { length: 500 }),
   status: mysqlEnum("status", ["active", "inactive"]).notNull().default("active"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
-});
-
-// ---------------------------------------------------------------------------
-// weeks (훈련 주차 / 암송 주차 공통 기준)
-// ---------------------------------------------------------------------------
-export const weeks = mysqlTable("weeks", {
-  id: int("id").primaryKey().autoincrement(),
-  weekNumber: int("week_number").notNull().unique(),
-  weekStart: date("week_start", { mode: "string" }).notNull().unique(),
-  weekEnd: date("week_end", { mode: "string" }).notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 // ---------------------------------------------------------------------------
@@ -60,14 +66,14 @@ export const trainingRecords = mysqlTable(
 );
 
 // ---------------------------------------------------------------------------
-// weekly_training_records (주간)
+// weekly_training_records (주간 — 그룹 시작일 기준으로 계산된 주차 번호로 관리)
 // ---------------------------------------------------------------------------
 export const weeklyTrainingRecords = mysqlTable(
   "weekly_training_records",
   {
     id: int("id").primaryKey().autoincrement(),
     userId: int("user_id").notNull().references(() => users.id),
-    weekId: int("week_id").notNull().references(() => weeks.id),
+    weekNumber: int("week_number").notNull(),
     inductiveStudyCompleted: boolean("inductive_study_completed").notNull().default(false),
     bookReadingCompleted: boolean("book_reading_completed").notNull().default(false),
     previewCompleted: boolean("preview_completed").notNull().default(false),
@@ -80,16 +86,16 @@ export const weeklyTrainingRecords = mysqlTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
   },
   (table) => ({
-    uqUserWeek: unique("uq_user_week").on(table.userId, table.weekId),
+    uqUserWeek: unique("uq_user_week").on(table.userId, table.weekNumber),
   })
 );
 
 // ---------------------------------------------------------------------------
-// memorization_passages
+// memorization_passages (주차 번호만으로 관리 — 그룹과 무관하게 전체 공통)
 // ---------------------------------------------------------------------------
 export const memorizationPassages = mysqlTable("memorization_passages", {
   id: int("id").primaryKey().autoincrement(),
-  weekId: int("week_id").notNull().references(() => weeks.id),
+  weekNumber: int("week_number").notNull(),
   book: varchar("book", { length: 50 }).notNull(),
   chapterVerse: varchar("chapter_verse", { length: 20 }).notNull(),
   content: text("content").notNull(),
@@ -104,7 +110,7 @@ export const memorizationPassages = mysqlTable("memorization_passages", {
 export const memorizationTestSessions = mysqlTable("memorization_test_sessions", {
   id: int("id").primaryKey().autoincrement(),
   userId: int("user_id").notNull().references(() => users.id),
-  scopeWeekId: int("scope_week_id").notNull().references(() => weeks.id),
+  scopeWeekNumber: int("scope_week_number").notNull(),
   testType: mysqlEnum("test_type", ["full_recite", "fill_blank", "full_input"]).notNull(),
   totalPassages: int("total_passages").notNull(),
   averageScore: decimal("average_score", { precision: 5, scale: 2 }),
@@ -154,15 +160,15 @@ export const appSettings = mysqlTable("app_settings", {
 // ---------------------------------------------------------------------------
 // relations (조인 편의용)
 // ---------------------------------------------------------------------------
-export const usersRelations = relations(users, ({ many }) => ({
+export const groupsRelations = relations(groups, ({ many }) => ({
+  members: many(users),
+}));
+
+export const usersRelations = relations(users, ({ one, many }) => ({
+  group: one(groups, { fields: [users.groupId], references: [groups.id] }),
   trainingRecords: many(trainingRecords),
   weeklyTrainingRecords: many(weeklyTrainingRecords),
   memorizationSessions: many(memorizationTestSessions),
-}));
-
-export const weeksRelations = relations(weeks, ({ many }) => ({
-  passages: many(memorizationPassages),
-  weeklyTrainingRecords: many(weeklyTrainingRecords),
 }));
 
 export const memorizationTestSessionsRelations = relations(

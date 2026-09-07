@@ -10,15 +10,9 @@ import LoadingState from "@/components/common/LoadingState.vue";
 import ErrorState from "@/components/common/ErrorState.vue";
 import EmptyState from "@/components/common/EmptyState.vue";
 
-interface Week {
-  id: number;
-  weekNumber: number;
-  weekStart: string;
-  weekEnd: string;
-}
 interface Passage {
   id: number;
-  weekId: number;
+  weekNumber: number;
   book: string;
   chapterVerse: string;
   content: string;
@@ -26,8 +20,9 @@ interface Passage {
 }
 
 const toast = useToast();
-const weeks = ref<Week[]>([]);
-const selectedWeekId = ref<number | null>(null);
+// 암송 구절은 그룹과 무관하게 순수 주차 번호로만 관리한다 (그룹 A/B 상관없이 공통).
+const weekNumbers = ref<number[]>([]);
+const selectedWeekNumber = ref<number | null>(null);
 const passages = ref<Passage[]>([]);
 const loading = ref(true);
 const loadError = ref(false);
@@ -36,8 +31,7 @@ const showPassageModal = ref(false);
 const editingPassage = ref<Passage | null>(null);
 const form = ref({ book: "", chapterVerse: "", content: "", displayOrder: 1 });
 
-const showNewWeekModal = ref(false);
-const newWeekStart = ref("");
+const newWeekNumberInput = ref<number | null>(null);
 
 const blankInterval = ref(3);
 
@@ -58,18 +52,18 @@ async function saveBlankInterval() {
   }
 }
 
-async function loadWeeks() {
-  const { weeks: list } = await api.get<{ weeks: Week[] }>("/admin/weeks");
-  weeks.value = list;
-  if (!selectedWeekId.value && list.length > 0) {
-    selectedWeekId.value = list[list.length - 1].id;
+async function loadWeekNumbers() {
+  const { weekNumbers: list } = await api.get<{ weekNumbers: number[] }>("/admin/memorization/weeks");
+  weekNumbers.value = list;
+  if (!selectedWeekNumber.value && list.length > 0) {
+    selectedWeekNumber.value = list[list.length - 1];
   }
 }
 
 async function loadPassages() {
-  if (!selectedWeekId.value) return;
+  if (!selectedWeekNumber.value) return;
   const { passages: list } = await api.get<{ passages: Passage[] }>(
-    `/admin/memorization/passages?weekId=${selectedWeekId.value}`
+    `/admin/memorization/passages?weekNumber=${selectedWeekNumber.value}`
   );
   passages.value = list;
 }
@@ -78,7 +72,7 @@ async function initialLoad() {
   loading.value = true;
   loadError.value = false;
   try {
-    await loadWeeks();
+    await loadWeekNumbers();
     await loadPassages();
     await loadSettings();
   } catch {
@@ -90,8 +84,8 @@ async function initialLoad() {
 
 onMounted(initialLoad);
 
-async function selectWeek(id: number) {
-  selectedWeekId.value = id;
+async function selectWeek(weekNumber: number) {
+  selectedWeekNumber.value = weekNumber;
   await loadPassages();
 }
 
@@ -108,14 +102,15 @@ function openEditPassage(p: Passage) {
 }
 
 async function savePassage() {
-  if (!selectedWeekId.value) return;
+  if (!selectedWeekNumber.value) return;
   try {
     if (editingPassage.value) {
       await api.put(`/admin/memorization/passages/${editingPassage.value.id}`, form.value);
     } else {
-      await api.post("/admin/memorization/passages", { ...form.value, weekId: selectedWeekId.value });
+      await api.post("/admin/memorization/passages", { ...form.value, weekNumber: selectedWeekNumber.value });
     }
     showPassageModal.value = false;
+    await loadWeekNumbers();
     await loadPassages();
     toast.success("✓ 저장되었습니다.");
   } catch {
@@ -133,27 +128,26 @@ async function deletePassage(id: number) {
   }
 }
 
-async function createWeek() {
-  if (!newWeekStart.value) return;
-  try {
-    const { week } = await api.post<{ week: Week }>("/admin/weeks", { weekStart: newWeekStart.value });
-    showNewWeekModal.value = false;
-    newWeekStart.value = "";
-    await loadWeeks();
-    await selectWeek(week.id);
-    toast.success("주차가 생성되었습니다.");
-  } catch {
-    toast.error("주차 생성에 실패했습니다. 월요일 날짜인지 확인해주세요.");
+// 주차는 별도로 "생성"하는 개념이 아니라, 그 번호로 구절을 하나라도 등록하면
+// 자연스럽게 목록에 나타난다. 아직 구절이 없는 새 주차 번호로 먼저 이동해서
+// 구절을 추가할 수 있도록 이 입력창을 둔다.
+function goToWeekNumber() {
+  if (!newWeekNumberInput.value || newWeekNumberInput.value < 1) return;
+  if (!weekNumbers.value.includes(newWeekNumberInput.value)) {
+    weekNumbers.value = [...weekNumbers.value, newWeekNumberInput.value].sort((a, b) => a - b);
   }
+  selectedWeekNumber.value = newWeekNumberInput.value;
+  newWeekNumberInput.value = null;
+  loadPassages();
 }
 </script>
 
 <template>
   <div class="admin-memorization">
-    <div class="admin-memorization__header">
-      <h1 class="admin-memorization__title">암송 구절 관리</h1>
-      <BaseButton size="sm" variant="secondary" @click="showNewWeekModal = true">+ 주차 추가</BaseButton>
-    </div>
+    <h1 class="admin-memorization__title">암송 구절 관리</h1>
+    <p class="admin-memorization__desc">
+      구절은 그룹과 무관하게 주차 번호로만 관리됩니다. 그룹 A든 B든 "3주차 구절"은 항상 동일하게 보입니다.
+    </p>
 
     <LoadingState v-if="loading" />
     <ErrorState v-else-if="loadError" @retry="initialLoad" />
@@ -171,28 +165,31 @@ async function createWeek() {
       </div>
     </BaseCard>
 
-    <div v-if="weeks.length === 0">
-      <BaseCard>
-        <EmptyState message="등록된 주차가 없습니다. 먼저 주차를 추가해주세요." icon="calendar" />
-      </BaseCard>
-    </div>
-    <template v-else>
-    <div class="admin-memorization__weeks">
-      <button
-        v-for="w in weeks"
-        :key="w.id"
-        type="button"
-        class="admin-memorization__week-chip"
-        :class="{ 'is-active': selectedWeekId === w.id }"
-        @click="selectWeek(w.id)"
-      >
-        Week {{ w.weekNumber }}
-      </button>
+    <div class="admin-memorization__week-nav">
+      <div class="admin-memorization__weeks">
+        <button
+          v-for="w in weekNumbers"
+          :key="w"
+          type="button"
+          class="admin-memorization__week-chip"
+          :class="{ 'is-active': selectedWeekNumber === w }"
+          @click="selectWeek(w)"
+        >
+          {{ w }}주차
+        </button>
+      </div>
+      <div class="admin-memorization__week-add">
+        <input v-model.number="newWeekNumberInput" type="number" min="1" placeholder="주차 번호" />
+        <BaseButton size="sm" variant="secondary" @click="goToWeekNumber">이동/추가</BaseButton>
+      </div>
     </div>
 
-    <BaseCard>
+    <BaseCard v-if="weekNumbers.length === 0">
+      <EmptyState message="아직 등록된 구절이 없습니다. 위에서 주차 번호를 입력해 시작해보세요." icon="calendar" />
+    </BaseCard>
+    <BaseCard v-else>
       <div class="admin-memorization__list-header">
-        <span class="admin-memorization__count">{{ passages.length }}개 구절</span>
+        <span class="admin-memorization__count">{{ selectedWeekNumber }}주차 · {{ passages.length }}개 구절</span>
         <BaseButton size="sm" @click="openAddPassage">+ 암송 구절 추가</BaseButton>
       </div>
 
@@ -211,7 +208,6 @@ async function createWeek() {
       <EmptyState v-else message="이 주차에 등록된 구절이 없습니다." icon="book" />
     </BaseCard>
     </template>
-    </template>
 
     <BaseModal v-model="showPassageModal" :title="editingPassage ? '구절 수정' : '구절 추가'">
       <div class="admin-memorization__form">
@@ -225,22 +221,18 @@ async function createWeek() {
         <BaseButton style="width: 100%" @click="savePassage">저장</BaseButton>
       </div>
     </BaseModal>
-
-    <BaseModal v-model="showNewWeekModal" title="주차 추가">
-      <div class="admin-memorization__form">
-        <BaseInput v-model="newWeekStart" type="date" label="주 시작일 (월요일)" />
-        <BaseButton style="width: 100%" @click="createWeek">생성</BaseButton>
-      </div>
-    </BaseModal>
   </div>
 </template>
 
 <style scoped>
-.admin-memorization__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-4);
+.admin-memorization__title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-xl);
+}
+.admin-memorization__desc {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  margin: 0 0 var(--space-4);
 }
 .admin-memorization__settings {
   display: flex;
@@ -264,15 +256,16 @@ async function createWeek() {
   padding: 0 var(--space-3);
   background: var(--color-surface);
 }
-.admin-memorization__title {
-  margin: 0;
-  font-size: var(--font-size-xl);
+.admin-memorization__week-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 .admin-memorization__weeks {
   display: flex;
   gap: var(--space-2);
   overflow-x: auto;
-  margin-bottom: var(--space-4);
   padding-bottom: var(--space-1);
 }
 .admin-memorization__week-chip {
@@ -288,6 +281,17 @@ async function createWeek() {
   background: var(--color-primary);
   color: #fff;
   border-color: var(--color-primary);
+}
+.admin-memorization__week-add {
+  display: flex;
+  gap: var(--space-2);
+}
+.admin-memorization__week-add input {
+  width: 120px;
+  min-height: var(--touch-target-min);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
 }
 .admin-memorization__list-header {
   display: flex;
@@ -337,11 +341,6 @@ async function createWeek() {
 }
 .admin-memorization__item-actions button.is-danger {
   color: var(--color-danger);
-}
-.admin-memorization__empty {
-  text-align: center;
-  color: var(--color-text-secondary);
-  padding: var(--space-6) 0;
 }
 .admin-memorization__form {
   display: flex;

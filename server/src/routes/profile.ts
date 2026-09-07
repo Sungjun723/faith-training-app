@@ -10,7 +10,7 @@ import {
 } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
-import { getCurrentWeek, getWeekById } from "../services/weeks.js";
+import { getCurrentWeekForUser } from "../services/groupWeeks.js";
 import { calculateWeeklySummary } from "../services/weeklyProgress.js";
 
 export const profileRouter = Router();
@@ -22,8 +22,8 @@ profileRouter.get(
     const user = await db.query.users.findFirst({ where: eq(users.id, req.user!.userId) });
     if (!user) throw new AppError("사용자를 찾을 수 없습니다.", 404);
 
-    const currentWeek = await getCurrentWeek();
-    const weeklySummary = await calculateWeeklySummary(user.id, currentWeek.id);
+    const currentWeek = await getCurrentWeekForUser(user.id);
+    const weeklySummary = await calculateWeeklySummary(user.id, currentWeek.weekNumber);
 
     // 이번 달 진행률: 이번 달 range의 daily record 기반 평균 (간단화된 산식)
     const now = new Date();

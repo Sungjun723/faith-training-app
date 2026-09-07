@@ -1,8 +1,8 @@
 import bcrypt from "bcryptjs";
 import { db, pool } from "./client.js";
-import { users, memorizationPassages } from "./schema.js";
-import { getCurrentWeek } from "../services/weeks.js";
+import { users, memorizationPassages, groups } from "./schema.js";
 import { eq } from "drizzle-orm";
+import { toDateString, getWeekStart } from "../utils/date.js";
 
 async function run() {
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@example.com";
@@ -23,14 +23,25 @@ async function run() {
     console.log("관리자 계정이 이미 존재합니다. 건너뜁니다.");
   }
 
-  const week1 = await getCurrentWeek();
+  // 샘플 그룹 하나 생성 (이번 주 월요일 시작) — 실제 운영 시 관리자 화면에서 그룹을
+  // 원하는 시작일로 직접 만들면 된다. 이 샘플은 로컬 개발/테스트 편의용.
+  const defaultGroupName = "기본 그룹";
+  let defaultGroup = await db.query.groups.findFirst({ where: eq(groups.name, defaultGroupName) });
+  if (!defaultGroup) {
+    const thisMonday = toDateString(getWeekStart(new Date()));
+    await db.insert(groups).values({ name: defaultGroupName, startDate: thisMonday });
+    defaultGroup = await db.query.groups.findFirst({ where: eq(groups.name, defaultGroupName) });
+    console.log(`샘플 그룹 생성: "${defaultGroupName}" (시작일 ${thisMonday})`);
+  }
+
+  // 암송 구절은 그룹과 무관하게 순수 주차 번호로 등록한다.
   const existingPassages = await db.query.memorizationPassages.findMany({
-    where: eq(memorizationPassages.weekId, week1.id),
+    where: eq(memorizationPassages.weekNumber, 1),
   });
   if (existingPassages.length === 0) {
     await db.insert(memorizationPassages).values([
       {
-        weekId: week1.id,
+        weekNumber: 1,
         book: "요한복음",
         chapterVerse: "3:16",
         content:
@@ -38,7 +49,7 @@ async function run() {
         displayOrder: 1,
       },
       {
-        weekId: week1.id,
+        weekNumber: 1,
         book: "시편",
         chapterVerse: "23:1",
         content: "여호와는 나의 목자시니 내게 부족함이 없으리로다.",

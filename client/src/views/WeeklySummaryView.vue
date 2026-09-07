@@ -6,15 +6,15 @@ import WeeklySummaryPanel from "@/components/weekly/WeeklySummaryPanel.vue";
 
 const route = useRoute();
 const trainingStore = useTrainingStore();
-const weekId = ref<number | null>(null);
+const weekNumber = ref<number | null>(null);
 
 async function resolveWeekId() {
   const q = route.query.week;
   if (q) {
-    weekId.value = Number(q);
+    weekNumber.value = Number(q);
   } else {
     const week = await trainingStore.fetchCurrentWeek();
-    weekId.value = week.id;
+    weekNumber.value = week.weekNumber;
   }
 }
 
@@ -23,5 +23,5 @@ watch(() => route.query.week, resolveWeekId);
 </script>
 
 <template>
-  <WeeklySummaryPanel :week-id="weekId" />
+  <WeeklySummaryPanel :week-number="weekNumber" />
 </template>

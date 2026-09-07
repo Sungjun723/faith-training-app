@@ -36,6 +36,12 @@ const routes = [
     meta: { requiresAdmin: true },
   },
   {
+    path: "/admin/groups",
+    name: "admin-groups",
+    component: () => import("@/views/admin/AdminGroupsView.vue"),
+    meta: { requiresAdmin: true },
+  },
+  {
     path: "/admin/memorization",
     name: "admin-memorization",
     component: () => import("@/views/admin/AdminMemorizationView.vue"),

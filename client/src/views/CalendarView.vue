@@ -27,7 +27,7 @@ const showModal = computed({
 
 // 캘린더 옆(또는 아래)에 항상 표시되는 주간 결산 패널의 대상 주차.
 // 기본값은 이번 주이며, 날짜를 클릭해 "이번 주 결산 보기"를 누르면 그 주로 전환된다.
-const activeWeekId = ref<number | null>(null);
+const activeWeekNumber = ref<number | null>(null);
 
 const records = computed(() => trainingStore.monthCache[`${year.value}-${month.value}`] ?? []);
 
@@ -51,10 +51,10 @@ watch([year, month], load);
 onMounted(async () => {
   const queryWeek = route.query.week;
   if (queryWeek) {
-    activeWeekId.value = Number(queryWeek);
+    activeWeekNumber.value = Number(queryWeek);
   } else {
     const week = await trainingStore.fetchCurrentWeek();
-    activeWeekId.value = week.id;
+    activeWeekNumber.value = week.weekNumber;
   }
 });
 
@@ -78,7 +78,7 @@ function nextMonth() {
 async function goToWeekly() {
   if (!selectedDate.value) return;
   const week = await trainingStore.fetchWeekForDate(selectedDate.value);
-  activeWeekId.value = week.id;
+  activeWeekNumber.value = week.weekNumber;
   selectedDate.value = null;
 }
 </script>
@@ -104,7 +104,7 @@ async function goToWeekly() {
     </div>
 
     <div class="calendar-page__side">
-      <WeeklySummaryPanel :week-id="activeWeekId" />
+      <WeeklySummaryPanel :week-number="activeWeekNumber" />
     </div>
 
     <BaseModal v-model="showModal">

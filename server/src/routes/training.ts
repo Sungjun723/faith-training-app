@@ -6,7 +6,7 @@ import { trainingRecords, weeklyTrainingRecords } from "../db/schema.js";
 import { requireAuth } from "../middleware/auth.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { isSunday } from "../utils/date.js";
-import { getOrCreateWeekForDate, getWeekById } from "../services/weeks.js";
+import { getCurrentWeekForUser, getWeekForDateForUser } from "../services/groupWeeks.js";
 import { calculateWeeklySummary } from "../services/weeklyProgress.js";
 import { env } from "../config/env.js";
 
@@ -91,54 +91,56 @@ const weeklyUpsertSchema = z.object({
 });
 
 trainingRouter.get(
-  "/weekly/:weekId",
+  "/weekly/:weekNumber",
   asyncHandler(async (req, res) => {
-    const weekId = Number(req.params.weekId);
+    const weekNumber = Number(req.params.weekNumber);
     const record = await db.query.weeklyTrainingRecords.findFirst({
-      where: and(eq(weeklyTrainingRecords.userId, req.user!.userId), eq(weeklyTrainingRecords.weekId, weekId)),
+      where: and(eq(weeklyTrainingRecords.userId, req.user!.userId), eq(weeklyTrainingRecords.weekNumber, weekNumber)),
     });
     res.json({ record: record ?? null });
   })
 );
 
 trainingRouter.put(
-  "/weekly/:weekId",
+  "/weekly/:weekNumber",
   asyncHandler(async (req, res) => {
-    const weekId = Number(req.params.weekId);
-    await getWeekById(weekId); // 존재하지 않으면 에러
+    const weekNumber = Number(req.params.weekNumber);
+    if (!Number.isInteger(weekNumber) || weekNumber < 1) {
+      throw new AppError("올바르지 않은 주차입니다.", 400);
+    }
     const body = weeklyUpsertSchema.parse(req.body);
 
     const existing = await db.query.weeklyTrainingRecords.findFirst({
-      where: and(eq(weeklyTrainingRecords.userId, req.user!.userId), eq(weeklyTrainingRecords.weekId, weekId)),
+      where: and(eq(weeklyTrainingRecords.userId, req.user!.userId), eq(weeklyTrainingRecords.weekNumber, weekNumber)),
     });
 
     if (existing) {
       await db.update(weeklyTrainingRecords).set(body).where(eq(weeklyTrainingRecords.id, existing.id));
     } else {
-      await db.insert(weeklyTrainingRecords).values({ userId: req.user!.userId, weekId, ...body });
+      await db.insert(weeklyTrainingRecords).values({ userId: req.user!.userId, weekNumber, ...body });
     }
 
     const saved = await db.query.weeklyTrainingRecords.findFirst({
-      where: and(eq(weeklyTrainingRecords.userId, req.user!.userId), eq(weeklyTrainingRecords.weekId, weekId)),
+      where: and(eq(weeklyTrainingRecords.userId, req.user!.userId), eq(weeklyTrainingRecords.weekNumber, weekNumber)),
     });
     res.json({ record: saved });
   })
 );
 
 trainingRouter.get(
-  "/weekly/:weekId/summary",
+  "/weekly/:weekNumber/summary",
   asyncHandler(async (req, res) => {
-    const weekId = Number(req.params.weekId);
-    const summary = await calculateWeeklySummary(req.user!.userId, weekId);
+    const weekNumber = Number(req.params.weekNumber);
+    const summary = await calculateWeeklySummary(req.user!.userId, weekNumber);
     res.json(summary);
   })
 );
 
-// 오늘이 속한 주차 정보를 가져오기 위한 헬퍼 엔드포인트
+// 오늘이 속한 주차 정보 (내 그룹 시작일 기준)
 trainingRouter.get(
   "/current-week",
   asyncHandler(async (req, res) => {
-    const week = await getOrCreateWeekForDate(new Date());
+    const week = await getCurrentWeekForUser(req.user!.userId);
     res.json({ week });
   })
 );
@@ -149,7 +151,7 @@ trainingRouter.get(
   "/week-for-date",
   asyncHandler(async (req, res) => {
     const { date } = weekForDateQuerySchema.parse(req.query);
-    const week = await getOrCreateWeekForDate(new Date(`${date}T00:00:00`));
+    const week = await getWeekForDateForUser(req.user!.userId, date);
     res.json({ week });
   })
 );

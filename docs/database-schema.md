@@ -1,17 +1,35 @@
 # Database Schema (MySQL 8 / Drizzle ORM)
 
+> 이 문서는 여러 차례의 요구사항 변경(그룹 기반 주차, 관리자 비밀번호 재설정 등)을
+> 반영해 현재 스키마 기준으로 다시 정리한 버전이다.
+
 ## ERD 개요
 
 ```text
-users ──< training_records
-users ──< weekly_training_records >── weeks
-weeks ──< memorization_passages
-users ──< memorization_test_sessions ── weeks (scope)
-memorization_test_sessions ──< memorization_results >── memorization_passages
+groups ──< users ──< training_records
+                 └─< weekly_training_records (week_number: 그룹 시작일 기준 계산값)
+users ──< memorization_test_sessions ──< memorization_results >── memorization_passages
 users ──< audit_logs
 ```
 
-`weeks`를 훈련 주차와 암송 주차가 **공유하는 단일 기준 테이블**로 사용합니다. 이렇게 하면 "몇 주차까지 암송했는가"와 "이번 주 훈련 체크"가 항상 같은 주차 정의를 참조합니다.
+`memorization_passages`는 그룹과 무관하게 **순수 주차 번호(week_number)**로만 관리된다.
+그룹 A든 B든 "3주차 구절"은 항상 동일하다. 반면 "지금이 몇 주차인가"는 각 회원이
+속한 그룹의 시작일을 기준으로 매번 계산되는 값이며, 별도 테이블에 저장하지 않는다
+(services/groupWeeks.ts 참고).
+
+---
+
+## groups (그룹 — 시작일을 공유하는 학생 단위)
+
+| column | type | 제약 |
+|---|---|---|
+| id | INT AUTO_INCREMENT | PK |
+| name | VARCHAR(100) | NOT NULL, UNIQUE — 예: "그룹 A" |
+| start_date | DATE | NOT NULL — 이 그룹의 "1주차" 시작일. 요일 제한 없음 (목/일 등 자유) |
+| created_at / updated_at | TIMESTAMP | |
+
+- 관리자가 그룹 관리 화면에서 생성/수정한다.
+- 그룹에 속한 회원이 1명이라도 있으면 삭제할 수 없다 (API에서 차단).
 
 ---
 
@@ -24,28 +42,16 @@ users ──< audit_logs
 | email | VARCHAR(255) | NOT NULL, UNIQUE |
 | password_hash | VARCHAR(255) | NOT NULL |
 | role | ENUM('member','admin') | NOT NULL, DEFAULT 'member' |
+| group_id | INT | FK → groups.id, NULL 허용 (컬럼 자체는 nullable) |
 | profile_image | VARCHAR(500) | NULL |
 | status | ENUM('active','inactive') | NOT NULL, DEFAULT 'active' |
-| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
-| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP |
+| created_at / updated_at | TIMESTAMP | |
 
-- 비밀번호는 bcrypt 해시로만 저장 (평문/암호화 저장 금지)
-- `status='inactive'`는 관리자가 휴면/탈퇴 처리 시 사용 (레코드는 삭제하지 않음 — 데이터 무결성)
-
----
-
-## weeks
-
-| column | type | 제약 |
-|---|---|---|
-| id | INT AUTO_INCREMENT | PK |
-| week_number | INT | NOT NULL, UNIQUE |
-| week_start | DATE | NOT NULL, UNIQUE (월요일 기준) |
-| week_end | DATE | NOT NULL (일요일 기준) |
-| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
-
-- 관리자가 새 주차를 미리 생성하거나, 서버에서 배치로 자동 생성 (예: 매주 월요일 크론 또는 요청 시 lazy 생성)
-- `week_number`는 1부터 순증하는 정수 — 암송 누적 계산의 기준
+- **일반 회원(role='member')은 그룹이 필수** — DB 컬럼은 nullable이지만, 관리자가 회원을
+  생성할 때 API(`POST /api/admin/members`)에서 그룹 미선택 시 400 에러로 막는다.
+- 관리자(role='admin') 계정은 그룹이 없어도 된다.
+- 비밀번호는 이메일 재설정 없이 **관리자가 회원 상세 화면에서 직접 재설정**한다
+  (`PATCH /api/admin/members/:id/password`).
 
 ---
 
@@ -59,12 +65,10 @@ users ──< audit_logs
 | meditation_completed | BOOLEAN | NOT NULL, DEFAULT FALSE |
 | prayer_minutes | INT | NOT NULL, DEFAULT 0 — **일 최대 20분** (0~20 범위, API 레벨 검증) |
 | reading_pages | INT | NOT NULL, DEFAULT 0 |
-| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
-| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP |
+| created_at / updated_at | TIMESTAMP | |
 
-- **UNIQUE (user_id, record_date)** — 같은 날짜 중복 레코드 방지 (문서 43번 요구사항)
-- 일요일(`DAYOFWEEK(record_date) = 1`)에는 `meditation_completed`를 서버에서 항상 무시/거부 — API 레벨에서 검증 (클라이언트 비활성화만으로는 보안 경계가 아님)
-- `reading_pages`는 하루 목표 2페이지 기준. 값 자체는 자유 입력(확장 대비), 진행률 계산 시 목표치 대비로 환산
+- **UNIQUE (user_id, record_date)** — 같은 날짜 중복 레코드 방지
+- 일요일(`DAYOFWEEK(record_date) = 1`)에는 `meditation_completed`를 서버가 항상 거부
 
 ---
 
@@ -74,33 +78,53 @@ users ──< audit_logs
 |---|---|---|
 | id | INT AUTO_INCREMENT | PK |
 | user_id | INT | NOT NULL, FK → users.id |
-| week_id | INT | NOT NULL, FK → weeks.id |
+| week_number | INT | NOT NULL — **해당 회원이 속한 그룹의 시작일 기준으로 계산된 주차 번호** |
 | inductive_study_completed | BOOLEAN | DEFAULT FALSE — 한 주 귀납 |
 | book_reading_completed | BOOLEAN | DEFAULT FALSE — 독서 |
 | preview_completed | BOOLEAN | DEFAULT FALSE — 예습 |
 | sunday_service_completed | BOOLEAN | DEFAULT FALSE — 주일 예배 |
-| friday_service_completed | BOOLEAN | DEFAULT FALSE — **UI 라벨은 "청금"** (청년금요집회 = 금요예배. 컬럼명은 의미가 명확하도록 `friday_service_completed`로 지정, 화면에는 "청금"으로 표시) |
+| friday_service_completed | BOOLEAN | DEFAULT FALSE — **UI 라벨은 "청금"** (청년금요집회 = 금요예배) |
 | small_group_completed | BOOLEAN | DEFAULT FALSE — 순모임 |
-| memorization_completed | BOOLEAN | DEFAULT FALSE — 암송훈련 완료 체크 (암송 테스트 점수와는 별개) |
+| memorization_completed | BOOLEAN | DEFAULT FALSE — 암송훈련 완료 체크 |
 | created_at / updated_at | TIMESTAMP | |
 
-- **UNIQUE (user_id, week_id)** — 같은 주 중복 레코드 방지
+- **UNIQUE (user_id, week_number)** — 같은 회원의 같은 주차 중복 레코드 방지
+- 이전 버전에서는 전역 공유 `weeks` 테이블의 `week_id`를 참조했으나, 그룹별로 시작일이
+  달라지면서 **그룹 기준 계산값인 `week_number`를 직접 저장**하는 방식으로 변경했다.
+
+### 주차(week_number) 계산 방식 — `services/groupWeeks.ts`
+
+```text
+anchor = 그룹의 start_date (요일 제한 없음)
+주어진 날짜 D에 대해:
+  weekNumber = floor((D - anchor) / 7일) + 1   (최소 1로 고정)
+weekNumber에 대응하는 날짜 범위:
+  weekStart = anchor + (weekNumber - 1) * 7일
+  weekEnd   = weekStart + 6일
+```
+
+일요일 제외 로직은 "구간의 몇 번째 자리인지"가 아니라 **그 7일 구간 안에서 실제 달력상
+일요일에 해당하는 날짜를 찾아 제외**하는 방식으로 일반화되어 있다. 연속된 7일에는
+항상 정확히 하나의 일요일이 존재하므로, 그룹 시작 요일이 월요일이든 목요일이든
+일요일이든 상관없이 정확히 6일(일요일 제외)이 계산된다.
 
 ---
 
-## memorization_passages (암송 구절)
+## memorization_passages (암송 구절 — 그룹과 무관, 주차 번호로만 관리)
 
 | column | type | 제약 |
 |---|---|---|
 | id | INT AUTO_INCREMENT | PK |
-| week_id | INT | NOT NULL, FK → weeks.id (몇 주차에 새로 추가된 구절인지) |
+| week_number | INT | NOT NULL — 순수 정수. 그룹과 연결되지 않는다 |
 | book | VARCHAR(50) | NOT NULL — 예: 요한복음 |
 | chapter_verse | VARCHAR(20) | NOT NULL — 예: 3:16 |
 | content | TEXT | NOT NULL |
 | display_order | INT | NOT NULL, DEFAULT 0 |
 | created_at / updated_at | TIMESTAMP | |
 
-- "N주차까지 누적 구절 수"는 하드코딩된 `week_number × 2`가 아니라 **`SELECT COUNT(*) FROM memorization_passages WHERE week_id IN (해당 주차까지의 weeks.id)`** 로 계산 (문서 31번 요구사항 반영)
+- "N주차까지 누적 구절 수"는 `SELECT COUNT(*) FROM memorization_passages WHERE week_number <= N`으로 계산한다.
+- 그룹 A의 회원이 보는 "3주차까지 누적"과 그룹 B의 회원이 보는 "3주차까지 누적"은
+  실제 달력 날짜가 다르더라도 **완전히 동일한 구절 목록**이다.
 
 ---
 
@@ -110,15 +134,17 @@ users ──< audit_logs
 |---|---|---|
 | id | INT AUTO_INCREMENT | PK |
 | user_id | INT | NOT NULL, FK → users.id |
-| scope_week_id | INT | NOT NULL, FK → weeks.id — "N주차까지 누적" 선택값 |
+| scope_week_number | INT | NOT NULL — "N주차까지 누적" 선택값 (요청 당시 그 회원의 현재 주차 이하) |
 | test_type | ENUM('full_recite','fill_blank','full_input') | NOT NULL |
 | total_passages | INT | NOT NULL |
-| average_score | DECIMAL(5,2) | NULL (전체암송 모드는 채점 없음 → NULL) |
+| average_score | DECIMAL(5,2) | NULL |
 | status | ENUM('in_progress','completed') | NOT NULL, DEFAULT 'in_progress' |
 | started_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
 | completed_at | TIMESTAMP | NULL |
 
-- `status='in_progress'`인 세션은 문서 32번 "테스트 중 이탈 시 임시 저장" 요구사항의 근거 데이터 — 재접속 시 미완료 세션을 이어서 진행 가능
+- 진행 중인 세션을 재사용하는 것은 **범위(scope_week_number)와 테스트 방식(test_type)이
+  모두 일치할 때만** 허용한다. 다르면 이전 세션은 완료 처리하고 새 세션을 만든다
+  (다른 방식으로 다시 시작했는데 이전 세션이 섞여 채점 결과가 어긋나던 버그의 수정).
 
 ## memorization_results (구절별 결과)
 
@@ -131,24 +157,18 @@ users ──< audit_logs
 | correct_count | INT | DEFAULT 0 |
 | wrong_count | INT | DEFAULT 0 |
 | missing_count | INT | DEFAULT 0 |
-| test_snapshot | JSON | NULL — 빈칸 위치, 사용자 입력 원문, diff 결과 등 재현용 |
+| test_snapshot | JSON | NULL — 빈칸 위치, 사용자 입력, diff 결과 등 재현용 |
 | completed_at | TIMESTAMP | NULL |
 
-- 세션과 구절별 결과를 분리 저장 → 문서 32번 "틀린 구절만 테스트" 기능을 이후 `WHERE score < 100`(또는 wrong/missing > 0) 조회로 쉽게 확장 가능
-- `test_snapshot` JSON 예시 (부분 빈칸 테스트):
+`test_snapshot` 예시 (부분 빈칸 테스트):
 ```json
 {
-  "blanks": [
-    { "position": 1, "expected": "세상을" },
-    { "position": 4, "expected": "믿는" }
-  ],
-  "userInput": ["세상은", "믿는"],
-  "diff": [
-    { "type": "wrong", "expected": "세상을", "actual": "세상은" },
-    { "type": "correct", "text": "믿는" }
-  ]
+  "blanks": ["세상을", "믿는"],
+  "answers": ["세상은", "믿는"]
 }
 ```
+빈칸 채점 결과 화면은 이 `blanks`/`answers`를 이용해 틀리거나 빠뜨린 빈칸만
+빨간색 + 정답 병기로 표시한다.
 
 ---
 
@@ -157,26 +177,30 @@ users ──< audit_logs
 | column | type | 제약 |
 |---|---|---|
 | id | INT AUTO_INCREMENT | PK |
-| blank_interval | INT | NOT NULL, DEFAULT 3 — 빈칸 암송에서 몇 단어마다 하나를 빈칸으로 만들지 (관리자가 2~10 사이로 조정 가능) |
-| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP |
-
-- 단일 행만 유지 (앱 최초 요청 시 lazy하게 1행 생성)
-- 관리자 화면(암송 구절 관리 페이지 상단)에서 조정 가능
-
-## password_reset_tokens (비밀번호 재설정)
-
-~~이메일 기반 재설정은 채택하지 않기로 했습니다.~~ 관리자가 회원 상세 화면에서 새 비밀번호를 직접 입력해 재설정하는 방식(`PATCH /api/admin/members/:id/password`)으로 대체했습니다. 별도 테이블이 필요 없습니다.
+| blank_interval | INT | NOT NULL, DEFAULT 3 — 빈칸 암송 간격(몇 단어마다 1칸), 관리자가 2~10 사이로 조정 |
+| updated_at | TIMESTAMP | |
 
 ## audit_logs (관리자 작업 이력, 확장용)
 
-- 필수 기능은 아니지만 향후 감사 추적을 위해 스키마만 미리 준비 (구현은 관리자 CRUD 완료 후 선택적으로 진행 제안)
+| column | type | 제약 |
+|---|---|---|
+| id | INT AUTO_INCREMENT | PK |
+| admin_id | INT | NOT NULL, FK → users.id |
+| action | VARCHAR(100) | NOT NULL |
+| target_table | VARCHAR(100) | NULL |
+| target_id | INT | NULL |
+| detail | JSON | NULL |
+| created_at | TIMESTAMP | |
+
+- 스키마만 준비되어 있고 실제 기록 로직은 아직 연결되지 않음 (확장 여지)
 
 ---
 
 ## 무결성 규칙 요약
 
 1. `training_records`: `(user_id, record_date)` UNIQUE
-2. `weekly_training_records`: `(user_id, week_id)` UNIQUE
-3. 모든 FK는 `ON DELETE RESTRICT` 기본 (사용자 삭제 시 훈련 기록이 함께 사라지지 않도록 — 대신 `users.status='inactive'` 사용을 권장)
-4. 일요일 묵상 체크 금지는 **API 서비스 레이어에서 검증** (DB CHECK 제약은 MySQL 버전 호환성 이슈로 애플리케이션 레벨 검증을 우선)
-5. `prayer_minutes`는 0~20 범위를 벗어나는 값이 들어오면 API가 400 반환 (일일 목표이자 상한이 20분)
+2. `weekly_training_records`: `(user_id, week_number)` UNIQUE
+3. 일요일 묵상 체크 금지는 API 서비스 레이어에서 검증
+4. `prayer_minutes`는 0~20 범위를 벗어나면 API가 400 반환
+5. 일반 회원 생성 시 `group_id` 누락이면 API가 400 반환 (관리자는 예외)
+6. 그룹 삭제는 소속 회원이 없을 때만 허용

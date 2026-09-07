@@ -24,7 +24,7 @@ const sundayToday = isSunday(todayStr);
 
 const loading = ref(true);
 const loadError = ref(false);
-const weekId = ref<number | null>(null);
+const weekNumber = ref<number | null>(null);
 
 async function load() {
   loading.value = true;
@@ -32,8 +32,8 @@ async function load() {
   try {
     await trainingStore.fetchMonth(today.getFullYear(), today.getMonth() + 1);
     const week = await trainingStore.fetchCurrentWeek();
-    weekId.value = week.id;
-    await weeklyStore.fetchSummary(week.id);
+    weekNumber.value = week.weekNumber;
+    await weeklyStore.fetchSummary(week.weekNumber);
   } catch {
     loadError.value = true;
   } finally {
@@ -46,7 +46,7 @@ onMounted(load);
 const todayRecord = computed(() =>
   trainingStore.recordFor(today.getFullYear(), today.getMonth() + 1, todayStr)
 );
-const summary = computed(() => (weekId.value ? weeklyStore.summaries[weekId.value] : undefined));
+const summary = computed(() => (weekNumber.value ? weeklyStore.summaries[weekNumber.value] : undefined));
 
 async function toggleMeditation(value: boolean) {
   try {

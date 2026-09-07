@@ -16,11 +16,20 @@ interface Member {
   name: string;
   email: string;
   status: "active" | "inactive";
+  groupId: number | null;
+  groupName: string | null;
   thisWeekProgress: number;
+}
+
+interface Group {
+  id: number;
+  name: string;
+  startDate: string;
 }
 
 const toast = useToast();
 const members = ref<Member[]>([]);
+const groups = ref<Group[]>([]);
 const loading = ref(true);
 const loadError = ref(false);
 
@@ -28,8 +37,12 @@ async function load() {
   loading.value = true;
   loadError.value = false;
   try {
-    const { members: list } = await api.get<{ members: Member[] }>("/admin/members");
+    const [{ members: list }, { groups: groupList }] = await Promise.all([
+      api.get<{ members: Member[] }>("/admin/members"),
+      api.get<{ groups: Group[] }>("/admin/groups"),
+    ]);
     members.value = list;
+    groups.value = groupList;
   } catch {
     loadError.value = true;
   } finally {
@@ -40,12 +53,17 @@ async function load() {
 onMounted(load);
 
 const showAddModal = ref(false);
-const form = ref({ name: "", email: "", password: "" });
+const form = ref<{ name: string; email: string; password: string; groupId: number | null }>({
+  name: "",
+  email: "",
+  password: "",
+  groupId: null,
+});
 const formError = ref("");
 const submitting = ref(false);
 
 function openAddModal() {
-  form.value = { name: "", email: "", password: "" };
+  form.value = { name: "", email: "", password: "", groupId: groups.value[0]?.id ?? null };
   formError.value = "";
   showAddModal.value = true;
 }
@@ -58,6 +76,10 @@ async function submitNewMember() {
   }
   if (form.value.password.length < 8) {
     formError.value = "비밀번호는 8자 이상이어야 합니다.";
+    return;
+  }
+  if (!form.value.groupId) {
+    formError.value = "그룹을 선택해주세요. (먼저 그룹 관리에서 그룹을 만들어야 합니다)";
     return;
   }
   submitting.value = true;
@@ -92,6 +114,7 @@ async function submitNewMember() {
           <tr>
             <th>이름</th>
             <th>이메일</th>
+            <th>그룹</th>
             <th>이번 주</th>
             <th>상태</th>
           </tr>
@@ -102,6 +125,7 @@ async function submitNewMember() {
               <RouterLink :to="{ name: 'admin-member-detail', params: { id: m.id } }">{{ m.name }}</RouterLink>
             </td>
             <td class="admin-members__email">{{ m.email }}</td>
+            <td>{{ m.groupName ?? "미배정" }}</td>
             <td>{{ m.thisWeekProgress }}%</td>
             <td>
               <span class="admin-members__status" :class="{ 'is-inactive': m.status === 'inactive' }">
@@ -118,6 +142,13 @@ async function submitNewMember() {
         <BaseInput v-model="form.name" label="이름" placeholder="홍길동" />
         <BaseInput v-model="form.email" type="email" label="이메일" placeholder="member@example.com" />
         <BaseInput v-model="form.password" type="password" label="초기 비밀번호 (8자 이상)" />
+        <label class="admin-members__group-label">
+          <span>그룹</span>
+          <select v-model.number="form.groupId">
+            <option v-if="groups.length === 0" :value="null">먼저 그룹을 추가해주세요</option>
+            <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }} ({{ g.startDate }} 시작)</option>
+          </select>
+        </label>
         <p v-if="formError" class="admin-members__form-error" role="alert">{{ formError }}</p>
         <BaseButton style="width: 100%" :disabled="submitting" @click="submitNewMember">
           {{ submitting ? "추가하는 중..." : "회원 추가" }}
@@ -177,6 +208,21 @@ async function submitNewMember() {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+.admin-members__group-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+.admin-members__group-label select {
+  min-height: var(--touch-target-min);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 .admin-members__form-error {
   color: var(--color-danger);

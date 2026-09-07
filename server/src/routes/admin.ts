@@ -1,18 +1,17 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import {
   users,
-  weeks,
+  groups,
   memorizationPassages,
-  weeklyTrainingRecords,
   trainingRecords,
 } from "../db/schema.js";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { asyncHandler, AppError } from "../middleware/errorHandler.js";
-import { getCurrentWeek, getOrCreateWeekForDate } from "../services/weeks.js";
+import { getCurrentWeekForUser } from "../services/groupWeeks.js";
 import { calculateWeeklySummary } from "../services/weeklyProgress.js";
 import { getSettings, updateBlankInterval } from "../services/settings.js";
 
@@ -42,6 +41,70 @@ adminRouter.put(
 );
 
 // ---------------------------------------------------------------------------
+// 그룹 관리 (시작일을 공유하는 학생 단위)
+// ---------------------------------------------------------------------------
+adminRouter.get(
+  "/groups",
+  asyncHandler(async (req, res) => {
+    const allGroups = await db.query.groups.findMany({ orderBy: [asc(groups.startDate)] });
+    const memberCounts = await db
+      .select({ groupId: users.groupId, count: sql<number>`count(*)` })
+      .from(users)
+      .where(eq(users.role, "member"))
+      .groupBy(users.groupId);
+    const countMap = new Map(memberCounts.map((r) => [r.groupId, Number(r.count)]));
+
+    res.json({
+      groups: allGroups.map((g) => ({ ...g, memberCount: countMap.get(g.id) ?? 0 })),
+    });
+  })
+);
+
+const groupCreateSchema = z.object({
+  name: z.string().min(1, "그룹 이름을 입력해주세요."),
+  startDate: z.string().min(1, "시작일을 선택해주세요."), // YYYY-MM-DD
+});
+
+adminRouter.post(
+  "/groups",
+  asyncHandler(async (req, res) => {
+    const { name, startDate } = groupCreateSchema.parse(req.body);
+    const existing = await db.query.groups.findFirst({ where: eq(groups.name, name) });
+    if (existing) throw new AppError("이미 존재하는 그룹 이름입니다.", 400);
+
+    await db.insert(groups).values({ name, startDate });
+    const created = await db.query.groups.findFirst({ where: eq(groups.name, name) });
+    res.json({ group: created });
+  })
+);
+
+const groupUpdateSchema = groupCreateSchema.partial();
+
+adminRouter.put(
+  "/groups/:id",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const body = groupUpdateSchema.parse(req.body);
+    await db.update(groups).set(body).where(eq(groups.id, id));
+    const updated = await db.query.groups.findFirst({ where: eq(groups.id, id) });
+    res.json({ group: updated });
+  })
+);
+
+adminRouter.delete(
+  "/groups/:id",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const memberCount = await db.query.users.findFirst({ where: eq(users.groupId, id) });
+    if (memberCount) {
+      throw new AppError("이 그룹에 속한 회원이 있어 삭제할 수 없습니다. 먼저 회원을 다른 그룹으로 옮겨주세요.", 400);
+    }
+    await db.delete(groups).where(eq(groups.id, id));
+    res.json({ ok: true });
+  })
+);
+
+// ---------------------------------------------------------------------------
 // 회원 관리
 // ---------------------------------------------------------------------------
 const createMemberSchema = z.object({
@@ -49,12 +112,21 @@ const createMemberSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8, "비밀번호는 8자 이상이어야 합니다."),
   role: z.enum(["member", "admin"]).default("member"),
+  groupId: z.number().int().nullable().optional(),
 });
 
 adminRouter.post(
   "/members",
   asyncHandler(async (req, res) => {
-    const { name, email, password, role } = createMemberSchema.parse(req.body);
+    const { name, email, password, role, groupId } = createMemberSchema.parse(req.body);
+
+    if (role === "member" && !groupId) {
+      throw new AppError("일반 회원은 그룹을 반드시 선택해야 합니다.", 400);
+    }
+    if (groupId) {
+      const group = await db.query.groups.findFirst({ where: eq(groups.id, groupId) });
+      if (!group) throw new AppError("존재하지 않는 그룹입니다.", 400);
+    }
 
     const existing = await db.query.users.findFirst({ where: eq(users.email, email) });
     if (existing) {
@@ -62,7 +134,7 @@ adminRouter.post(
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    await db.insert(users).values({ name, email, passwordHash, role, status: "active" });
+    await db.insert(users).values({ name, email, passwordHash, role, groupId: groupId ?? null, status: "active" });
 
     const created = await db.query.users.findFirst({ where: eq(users.email, email) });
     res.json({
@@ -75,19 +147,31 @@ adminRouter.get(
   "/members",
   asyncHandler(async (req, res) => {
     const allUsers = await db.query.users.findMany({ orderBy: [asc(users.name)] });
-    const currentWeek = await getCurrentWeek();
+    const allGroups = await db.query.groups.findMany();
+    const groupNameById = new Map(allGroups.map((g) => [g.id, g.name]));
 
     const withProgress = await Promise.all(
       allUsers
         .filter((u) => u.role === "member")
         .map(async (u) => {
-          const summary = await calculateWeeklySummary(u.id, currentWeek.id);
+          let thisWeekProgress = 0;
+          if (u.groupId) {
+            try {
+              const currentWeek = await getCurrentWeekForUser(u.id);
+              const summary = await calculateWeeklySummary(u.id, currentWeek.weekNumber);
+              thisWeekProgress = summary.overallProgress;
+            } catch {
+              thisWeekProgress = 0;
+            }
+          }
           return {
             id: u.id,
             name: u.name,
             email: u.email,
             status: u.status,
-            thisWeekProgress: summary.overallProgress,
+            groupId: u.groupId,
+            groupName: u.groupId ? groupNameById.get(u.groupId) ?? null : null,
+            thisWeekProgress,
           };
         })
     );
@@ -103,8 +187,13 @@ adminRouter.get(
     const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
     if (!user) throw new AppError("회원을 찾을 수 없습니다.", 404);
 
-    const currentWeek = await getCurrentWeek();
-    const weeklySummary = await calculateWeeklySummary(userId, currentWeek.id);
+    const group = user.groupId ? await db.query.groups.findFirst({ where: eq(groups.id, user.groupId) }) : null;
+
+    let weeklySummary = null;
+    if (user.groupId) {
+      const currentWeek = await getCurrentWeekForUser(userId);
+      weeklySummary = await calculateWeeklySummary(userId, currentWeek.weekNumber);
+    }
 
     const recentDaily = await db.query.trainingRecords.findMany({
       where: eq(trainingRecords.userId, userId),
@@ -113,7 +202,14 @@ adminRouter.get(
     });
 
     res.json({
-      user: { id: user.id, name: user.name, email: user.email, status: user.status },
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        status: user.status,
+        groupId: user.groupId,
+        groupName: group?.name ?? null,
+      },
       weeklySummary,
       recentDaily,
     });
@@ -151,49 +247,52 @@ adminRouter.patch(
   })
 );
 
+const groupAssignSchema = z.object({ groupId: z.number().int() });
+
+adminRouter.patch(
+  "/members/:id/group",
+  asyncHandler(async (req, res) => {
+    const userId = Number(req.params.id);
+    const { groupId } = groupAssignSchema.parse(req.body);
+
+    const group = await db.query.groups.findFirst({ where: eq(groups.id, groupId) });
+    if (!group) throw new AppError("존재하지 않는 그룹입니다.", 400);
+
+    await db.update(users).set({ groupId }).where(eq(users.id, userId));
+    res.json({ ok: true });
+  })
+);
+
 // ---------------------------------------------------------------------------
-// 주차 관리
+// 암송 구절 관리 (주차 번호로만 관리, 그룹과 무관)
 // ---------------------------------------------------------------------------
 adminRouter.get(
-  "/weeks",
+  "/memorization/weeks",
   asyncHandler(async (req, res) => {
-    const allWeeks = await db.query.weeks.findMany({ orderBy: [asc(weeks.weekNumber)] });
-    res.json({ weeks: allWeeks });
+    const rows = await db
+      .selectDistinct({ weekNumber: memorizationPassages.weekNumber })
+      .from(memorizationPassages)
+      .orderBy(asc(memorizationPassages.weekNumber));
+    res.json({ weekNumbers: rows.map((r) => r.weekNumber) });
   })
 );
 
-const createWeekSchema = z.object({
-  weekStart: z.string(), // YYYY-MM-DD (월요일)
-});
-
-adminRouter.post(
-  "/weeks",
-  asyncHandler(async (req, res) => {
-    const { weekStart } = createWeekSchema.parse(req.body);
-    const week = await getOrCreateWeekForDate(new Date(`${weekStart}T00:00:00`));
-    res.json({ week });
-  })
-);
-
-// ---------------------------------------------------------------------------
-// 암송 구절 관리
-// ---------------------------------------------------------------------------
-const passageQuerySchema = z.object({ weekId: z.coerce.number().int().optional() });
+const passageQuerySchema = z.object({ weekNumber: z.coerce.number().int().optional() });
 
 adminRouter.get(
   "/memorization/passages",
   asyncHandler(async (req, res) => {
-    const { weekId } = passageQuerySchema.parse(req.query);
+    const { weekNumber } = passageQuerySchema.parse(req.query);
     const passages = await db.query.memorizationPassages.findMany({
-      where: weekId ? eq(memorizationPassages.weekId, weekId) : undefined,
-      orderBy: [asc(memorizationPassages.weekId), asc(memorizationPassages.displayOrder)],
+      where: weekNumber ? eq(memorizationPassages.weekNumber, weekNumber) : undefined,
+      orderBy: [asc(memorizationPassages.weekNumber), asc(memorizationPassages.displayOrder)],
     });
     res.json({ passages });
   })
 );
 
 const passageCreateSchema = z.object({
-  weekId: z.number().int(),
+  weekNumber: z.number().int().min(1),
   book: z.string().min(1),
   chapterVerse: z.string().min(1),
   content: z.string().min(1),
@@ -252,10 +351,13 @@ adminRouter.get(
   "/statistics",
   asyncHandler(async (req, res) => {
     const allMembers = await db.query.users.findMany({ where: eq(users.role, "member") });
-    const currentWeek = await getCurrentWeek();
+    const membersWithGroup = allMembers.filter((m) => m.groupId);
 
     const summaries = await Promise.all(
-      allMembers.map((m) => calculateWeeklySummary(m.id, currentWeek.id))
+      membersWithGroup.map(async (m) => {
+        const currentWeek = await getCurrentWeekForUser(m.id);
+        return calculateWeeklySummary(m.id, currentWeek.weekNumber);
+      })
     );
 
     const averageProgress =
