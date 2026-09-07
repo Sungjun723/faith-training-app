@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { useMemorizationStore, type TestType } from "@/stores/memorization";
+import { useMemorizationStore, type TestType, type ScopeType } from "@/stores/memorization";
 import { useToast } from "@/composables/useToast";
 import ScopeStep from "@/components/memorization/ScopeStep.vue";
 import TypeStep from "@/components/memorization/TypeStep.vue";
@@ -22,6 +22,7 @@ const step = ref<Step>("scope");
 const loading = ref(true);
 const loadError = ref(false);
 const scopeWeekNumber = ref<number | null>(null);
+const scopeType = ref<ScopeType>("cumulative");
 const finalSummary = ref<{
   totalPassages: number;
   averageScore: number | null;
@@ -44,15 +45,16 @@ async function load() {
 
 onMounted(load);
 
-function handleScopeConfirm(weekNumber: number) {
+function handleScopeConfirm(weekNumber: number, type: ScopeType) {
   scopeWeekNumber.value = weekNumber;
+  scopeType.value = type;
   step.value = "type";
 }
 
 async function handleTypeSelect(testType: TestType) {
   if (!scopeWeekNumber.value) return;
   try {
-    await store.startSession(scopeWeekNumber.value, testType);
+    await store.startSession(scopeWeekNumber.value, testType, scopeType.value);
     step.value = "test";
   } catch (err: any) {
     toast.error(err?.message ?? "테스트를 시작하지 못했습니다.");
@@ -96,6 +98,7 @@ async function handleNext() {
 function restart() {
   step.value = "scope";
   scopeWeekNumber.value = null;
+  scopeType.value = "cumulative";
   finalSummary.value = null;
 }
 

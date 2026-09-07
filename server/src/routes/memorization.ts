@@ -30,7 +30,19 @@ async function getPassagesUpToWeek(scopeWeekNumber: number) {
   });
 }
 
-// 주차 목록 + 각 주차까지의 누적 구절 수 (문서 18번 Step 1 UI용)
+/** weekNumber 그 주차에 등록된 구절만 순서대로 반환 (누적 아님). */
+async function getPassagesForWeek(weekNumber: number) {
+  return db.query.memorizationPassages.findMany({
+    where: eq(memorizationPassages.weekNumber, weekNumber),
+    orderBy: [asc(memorizationPassages.displayOrder)],
+  });
+}
+
+async function getPassagesByScope(scopeWeekNumber: number, scopeType: "single" | "cumulative") {
+  return scopeType === "single" ? getPassagesForWeek(scopeWeekNumber) : getPassagesUpToWeek(scopeWeekNumber);
+}
+
+// 주차 목록 + 각 주차만의 구절 수 / 각 주차까지의 누적 구절 수 (문서 18번 Step 1 UI용)
 // "현재 주차"는 요청한 사용자가 속한 그룹의 시작일 기준으로 계산된다.
 memorizationRouter.get(
   "/weeks",
@@ -39,8 +51,15 @@ memorizationRouter.get(
 
     const weekOptions = await Promise.all(
       Array.from({ length: currentWeek.weekNumber }, (_, i) => i + 1).map(async (weekNumber) => {
-        const passages = await getPassagesUpToWeek(weekNumber);
-        return { weekNumber, cumulativePassageCount: passages.length };
+        const [weekPassages, cumulativePassages] = await Promise.all([
+          getPassagesForWeek(weekNumber),
+          getPassagesUpToWeek(weekNumber),
+        ]);
+        return {
+          weekNumber,
+          weekPassageCount: weekPassages.length,
+          cumulativePassageCount: cumulativePassages.length,
+        };
       })
     );
 
@@ -50,30 +69,32 @@ memorizationRouter.get(
 
 const passagesQuerySchema = z.object({
   uptoWeek: z.coerce.number().int(),
+  scopeType: z.enum(["single", "cumulative"]).default("cumulative"),
 });
 
 memorizationRouter.get(
   "/passages",
   asyncHandler(async (req, res) => {
-    const { uptoWeek } = passagesQuerySchema.parse(req.query);
-    const passages = await getPassagesUpToWeek(uptoWeek);
+    const { uptoWeek, scopeType } = passagesQuerySchema.parse(req.query);
+    const passages = await getPassagesByScope(uptoWeek, scopeType);
     res.json({ passages });
   })
 );
 
 const createSessionSchema = z.object({
   scopeWeekNumber: z.number().int().min(1),
+  scopeType: z.enum(["single", "cumulative"]).default("cumulative"),
   testType: z.enum(["full_recite", "fill_blank", "full_input"]),
 });
 
 memorizationRouter.post(
   "/sessions",
   asyncHandler(async (req, res) => {
-    const { scopeWeekNumber, testType } = createSessionSchema.parse(req.body);
+    const { scopeWeekNumber, scopeType, testType } = createSessionSchema.parse(req.body);
 
     // 이미 진행 중인 세션이 있으면 재사용한다 (이탈 후 재접속 시나리오, 문서 32번).
-    // 단, 범위(scopeWeekNumber)나 테스트 방식(testType)이 다르면 다른 테스트를 새로
-    // 시작하려는 것이므로 재사용하지 않는다.
+    // 단, 범위(scopeWeekNumber)나 범위 종류(scopeType), 테스트 방식(testType)이 다르면
+    // 다른 테스트를 새로 시작하려는 것이므로 재사용하지 않는다.
     const inProgress = await db.query.memorizationTestSessions.findFirst({
       where: and(
         eq(memorizationTestSessions.userId, req.user!.userId),
@@ -81,7 +102,11 @@ memorizationRouter.post(
       ),
     });
     if (inProgress) {
-      if (inProgress.scopeWeekNumber === scopeWeekNumber && inProgress.testType === testType) {
+      if (
+        inProgress.scopeWeekNumber === scopeWeekNumber &&
+        inProgress.scopeType === scopeType &&
+        inProgress.testType === testType
+      ) {
         return res.json({ session: inProgress, resumed: true });
       }
       await db
@@ -90,7 +115,7 @@ memorizationRouter.post(
         .where(eq(memorizationTestSessions.id, inProgress.id));
     }
 
-    const passages = await getPassagesUpToWeek(scopeWeekNumber);
+    const passages = await getPassagesByScope(scopeWeekNumber, scopeType);
     if (passages.length === 0) {
       throw new AppError("해당 범위에 등록된 암송 구절이 없습니다.", 400);
     }
@@ -98,6 +123,7 @@ memorizationRouter.post(
     await db.insert(memorizationTestSessions).values({
       userId: req.user!.userId,
       scopeWeekNumber,
+      scopeType,
       testType,
       totalPassages: passages.length,
     });
@@ -125,7 +151,7 @@ memorizationRouter.get(
   "/sessions/:id",
   asyncHandler(async (req, res) => {
     const session = await loadSessionOrThrow(Number(req.params.id), req.user!.userId);
-    const passages = await getPassagesUpToWeek(session.scopeWeekNumber);
+    const passages = await getPassagesByScope(session.scopeWeekNumber, session.scopeType);
     const results = await db.query.memorizationResults.findMany({
       where: eq(memorizationResults.sessionId, session.id),
     });

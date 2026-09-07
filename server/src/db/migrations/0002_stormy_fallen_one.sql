@@ -1,0 +1,1 @@
+ALTER TABLE `memorization_test_sessions` ADD `scope_type` enum('single','cumulative') DEFAULT 'cumulative' NOT NULL;

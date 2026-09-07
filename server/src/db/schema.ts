@@ -111,6 +111,8 @@ export const memorizationTestSessions = mysqlTable("memorization_test_sessions",
   id: int("id").primaryKey().autoincrement(),
   userId: int("user_id").notNull().references(() => users.id),
   scopeWeekNumber: int("scope_week_number").notNull(),
+  // single: scopeWeekNumber 주차 구절만. cumulative: 1주차부터 scopeWeekNumber까지 누적.
+  scopeType: mysqlEnum("scope_type", ["single", "cumulative"]).notNull().default("cumulative"),
   testType: mysqlEnum("test_type", ["full_recite", "fill_blank", "full_input"]).notNull(),
   totalPassages: int("total_passages").notNull(),
   averageScore: decimal("average_score", { precision: 5, scale: 2 }),

@@ -1,8 +1,11 @@
 import { defineStore } from "pinia";
 import { api } from "@/utils/api";
 
+export type ScopeType = "single" | "cumulative";
+
 export interface MemorizationWeekOption {
   weekNumber: number;
+  weekPassageCount: number;
   cumulativePassageCount: number;
 }
 
@@ -21,6 +24,7 @@ export interface Session {
   id: number;
   userId: number;
   scopeWeekNumber: number;
+  scopeType: ScopeType;
   testType: TestType;
   totalPassages: number;
   status: "in_progress" | "completed";
@@ -68,18 +72,18 @@ export const useMemorizationStore = defineStore("memorization", {
       this.currentWeekNumber = currentWeekNumber;
       return weekOptions;
     },
-    async startSession(scopeWeekNumber: number, testType: TestType) {
+    async startSession(scopeWeekNumber: number, testType: TestType, scopeType: ScopeType) {
       // 이전 테스트가 끝난 뒤 마지막 문항의 채점 결과가 store에 남아있으면,
       // 새 세션의 첫 문항이 뜨기도 전에 그 결과 화면이 먼저 보이는 버그가 있었다.
       this.lastResult = null;
       const { session } = await api.post<{ session: Session; resumed: boolean }>("/memorization/sessions", {
         scopeWeekNumber,
+        scopeType,
         testType,
       });
       this.activeSession = session;
-      const { passages } = await api.get<{ passages: Passage[] }>(
-        `/memorization/passages?uptoWeek=${session.scopeWeekNumber}`
-      );
+      // 세션의 scopeType(단일 주차 / 누적)에 맞는 구절 목록은 세션 자체에서 다시 조회한다.
+      const { passages } = await api.get<{ passages: Passage[] }>(`/memorization/sessions/${session.id}`);
       this.passages = passages;
       this.currentIndex = 0;
       return session;
