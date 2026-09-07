@@ -1,17 +1,23 @@
 <script setup lang="ts">
-import { computed, watch } from "vue";
+import { computed, onMounted, watch } from "vue";
 import { useWeeklyStore, type WeeklyFlagKey } from "@/stores/weekly";
+import { useTrainingStore } from "@/stores/training";
 import { useToast } from "@/composables/useToast";
 import { weekdayLabel } from "@/utils/date";
 import BaseCard from "@/components/common/BaseCard.vue";
+import BaseButton from "@/components/common/BaseButton.vue";
 import WeeklyChecklist from "@/components/weekly/WeeklyChecklist.vue";
 import LoadingState from "@/components/common/LoadingState.vue";
 import ErrorState from "@/components/common/ErrorState.vue";
 
 const props = defineProps<{ weekNumber: number | null }>();
+const emit = defineEmits<{ (e: "update:weekNumber", value: number): void }>();
 
 const weeklyStore = useWeeklyStore();
+const trainingStore = useTrainingStore();
 const toast = useToast();
+
+onMounted(() => trainingStore.fetchCurrentWeek());
 
 async function load() {
   if (props.weekNumber) await weeklyStore.fetchSummary(props.weekNumber, true);
@@ -20,6 +26,19 @@ async function load() {
 watch(() => props.weekNumber, load, { immediate: true });
 
 const summary = computed(() => (props.weekNumber ? weeklyStore.summaries[props.weekNumber] : undefined));
+
+// 그룹이 아직 도달하지 않은 미래 주차는 볼 수 없다 (1주차부터 현재 주차까지만 이동 가능).
+const canGoPrev = computed(() => !!props.weekNumber && props.weekNumber > 1);
+const canGoNext = computed(
+  () => !!props.weekNumber && !!trainingStore.currentWeek && props.weekNumber < trainingStore.currentWeek.weekNumber
+);
+
+function goPrev() {
+  if (props.weekNumber && canGoPrev.value) emit("update:weekNumber", props.weekNumber - 1);
+}
+function goNext() {
+  if (props.weekNumber && canGoNext.value) emit("update:weekNumber", props.weekNumber + 1);
+}
 
 async function handleToggle(key: WeeklyFlagKey, value: boolean) {
   if (!props.weekNumber) return;
@@ -35,10 +54,14 @@ async function handleToggle(key: WeeklyFlagKey, value: boolean) {
 <template>
   <LoadingState v-if="weekNumber && !summary" message="주간 결산을 불러오는 중입니다..." />
   <div class="weekly-panel" v-else-if="summary">
-    <h2 class="weekly-panel__title">
-      {{ summary.week.weekNumber }}주차 결산
-      <span class="weekly-panel__range">({{ summary.week.weekStart }} ~ {{ summary.week.weekEnd }})</span>
-    </h2>
+    <div class="weekly-panel__header">
+      <BaseButton variant="ghost" size="sm" :disabled="!canGoPrev" @click="goPrev">‹ 이전 주</BaseButton>
+      <h2 class="weekly-panel__title">
+        {{ summary.week.weekNumber }}주차 결산
+        <span class="weekly-panel__range">({{ summary.week.weekStart }} ~ {{ summary.week.weekEnd }})</span>
+      </h2>
+      <BaseButton variant="ghost" size="sm" :disabled="!canGoNext" @click="goNext">다음 주 ›</BaseButton>
+    </div>
 
     <BaseCard class="weekly-panel__section">
       <h3 class="weekly-panel__section-title">전체 진행률</h3>
@@ -84,11 +107,20 @@ async function handleToggle(key: WeeklyFlagKey, value: boolean) {
 </template>
 
 <style scoped>
+.weekly-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
 .weekly-panel__title {
   font-size: var(--font-size-lg);
-  margin: 0 0 var(--space-4);
+  margin: 0;
+  text-align: center;
 }
 .weekly-panel__range {
+  display: block;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-regular);

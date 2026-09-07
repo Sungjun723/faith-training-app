@@ -104,7 +104,7 @@ async function goToWeekly() {
     </div>
 
     <div class="calendar-page__side">
-      <WeeklySummaryPanel :week-number="activeWeekNumber" />
+      <WeeklySummaryPanel v-model:week-number="activeWeekNumber" />
     </div>
 
     <BaseModal v-model="showModal">
