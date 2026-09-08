@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { useTrainingStore } from "@/stores/training";
@@ -35,6 +35,15 @@ interface Announcement {
   createdAt: string;
 }
 const announcements = ref<Announcement[]>([]);
+const ANNOUNCEMENT_FOLD_THRESHOLD = 100;
+const expandedAnnouncements = reactive<Record<number, boolean>>({});
+
+function isLongAnnouncement(content: string): boolean {
+  return content.length > ANNOUNCEMENT_FOLD_THRESHOLD;
+}
+function toggleAnnouncement(id: number) {
+  expandedAnnouncements[id] = !expandedAnnouncements[id];
+}
 
 async function loadAnnouncements() {
   try {
@@ -131,7 +140,18 @@ async function toggleReading(value: boolean) {
     >
       <p class="dashboard__announcement-label">📢 공지사항</p>
       <h2 class="dashboard__announcement-title">{{ a.title }}</h2>
-      <p class="dashboard__announcement-content">{{ a.content }}</p>
+      <p
+        class="dashboard__announcement-content"
+        :class="{ 'is-folded': isLongAnnouncement(a.content) && !expandedAnnouncements[a.id] }"
+      >{{ a.content }}</p>
+      <button
+        v-if="isLongAnnouncement(a.content)"
+        type="button"
+        class="dashboard__announcement-toggle"
+        @click="toggleAnnouncement(a.id)"
+      >
+        {{ expandedAnnouncements[a.id] ? "접기 ▲" : "더보기 ▼" }}
+      </button>
     </BaseCard>
 
     <div class="dashboard__columns">
@@ -236,8 +256,25 @@ async function toggleReading(value: boolean) {
 .dashboard__announcement-content {
   margin: 0;
   font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
+  color: var(--color-text);
   white-space: pre-wrap;
+}
+.dashboard__announcement-content.is-folded {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.dashboard__announcement-toggle {
+  display: block;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
 }
 .dashboard__today-item {
   padding: var(--space-2) 0;
@@ -315,7 +352,7 @@ async function toggleReading(value: boolean) {
 }
 .dashboard__meditation-content {
   margin: 0;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-base);
   line-height: var(--line-height-relaxed, 1.6);
   white-space: pre-wrap;
 }
