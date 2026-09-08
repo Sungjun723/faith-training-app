@@ -16,9 +16,11 @@ async function handleLogout() {
 
 <template>
   <header class="app-header">
-    <RouterLink :to="{ name: 'dashboard' }" class="app-header__brand">신앙훈련 노트</RouterLink>
+    <RouterLink :to="{ name: auth.isAdmin ? 'admin' : 'dashboard' }" class="app-header__brand">
+      신앙훈련 노트
+    </RouterLink>
     <div class="app-header__right">
-      <RouterLink :to="{ name: 'profile' }" class="app-header__user">
+      <RouterLink :to="{ name: auth.isAdmin ? 'admin' : 'profile' }" class="app-header__user">
         {{ auth.user?.name }}
       </RouterLink>
       <button class="app-header__logout" @click="handleLogout">로그아웃</button>

@@ -11,7 +11,9 @@ import { profileRouter } from "./routes/profile.js";
 import { memorizationRouter } from "./routes/memorization.js";
 import { adminRouter } from "./routes/admin.js";
 import { announcementsRouter } from "./routes/announcements.js";
+import { meditationRouter } from "./routes/meditation.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { registerCronJobs } from "./services/cronJobs.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -27,6 +29,7 @@ app.use("/api/profile", profileRouter);
 app.use("/api/memorization", memorizationRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/announcements", announcementsRouter);
+app.use("/api/meditation", meditationRouter);
 
 // production: client/dist를 정적으로 서빙 + SPA fallback
 // server/dist/index.js 기준 상대 경로로 client/dist를 찾는다.
@@ -41,3 +44,5 @@ app.use(errorHandler);
 app.listen(env.port, () => {
   console.log(`Server listening on port ${env.port} (${env.nodeEnv})`);
 });
+
+registerCronJobs();

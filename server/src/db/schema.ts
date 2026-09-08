@@ -150,6 +150,19 @@ export const auditLogs = mysqlTable("audit_logs", {
 });
 
 // ---------------------------------------------------------------------------
+// daily_meditations (woorichurch.org "한 구절 묵상"을 매일 새벽 크롤링해 저장 - 날짜별 1건)
+// ---------------------------------------------------------------------------
+export const dailyMeditations = mysqlTable("daily_meditations", {
+  id: int("id").primaryKey().autoincrement(),
+  date: date("date", { mode: "string" }).notNull().unique(),
+  title: varchar("title", { length: 300 }).notNull(),
+  verse: varchar("verse", { length: 200 }).notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+});
+
+// ---------------------------------------------------------------------------
 // announcements (관리자가 등록하는 공지사항 - 활성 상태인 것만 회원 홈에 노출)
 // ---------------------------------------------------------------------------
 export const announcements = mysqlTable("announcements", {

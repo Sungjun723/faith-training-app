@@ -18,6 +18,7 @@ import { asyncHandler, AppError } from "../middleware/errorHandler.js";
 import { getCurrentWeekForUser } from "../services/groupWeeks.js";
 import { calculateWeeklySummary } from "../services/weeklyProgress.js";
 import { getSettings, updateBlankInterval } from "../services/settings.js";
+import { crawlAndSaveMeditation } from "../services/meditationCrawler.js";
 
 export const adminRouter = Router();
 adminRouter.use(requireAuth, requireAdmin);
@@ -487,6 +488,21 @@ adminRouter.get(
     }
 
     res.json({ weeks });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// 한 구절 묵상 (매일 새벽 1시 자동 크롤링 — 즉시 재크롤링용 관리자 수동 트리거)
+// ---------------------------------------------------------------------------
+adminRouter.post(
+  "/meditation/crawl",
+  asyncHandler(async (req, res) => {
+    try {
+      const meditation = await crawlAndSaveMeditation();
+      res.json({ meditation });
+    } catch (err) {
+      throw new AppError(err instanceof Error ? err.message : "크롤링에 실패했습니다.", 502);
+    }
   })
 );
 

@@ -22,6 +22,13 @@
       "when": 1788769269279,
       "tag": "0002_stormy_fallen_one",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1788830067812,
+      "tag": "0003_dry_khan",
+      "breakpoints": true
     }
   ]
 }

@@ -7,7 +7,7 @@ const routes = [
     path: "/dashboard",
     name: "dashboard",
     component: () => import("@/views/DashboardView.vue"),
-    meta: { memberOnly: true },
+    meta: { fullWidth: true, memberOnly: true },
   },
   {
     path: "/calendar",
