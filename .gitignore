@@ -6,3 +6,5 @@ dist/
 *.log
 .DS_Store
 db.txt
+CLAUDE.md
+.claude/
